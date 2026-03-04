@@ -3,124 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>電路圖影像辨識轉 JSON</title>
+  <title>電路圖影像辨識轉 JSON v4</title>
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, "Microsoft JhengHei", sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-    }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-    }
-    .desc {
-      margin: 0 0 16px;
-      color: #4b5563;
-      line-height: 1.6;
-    }
-    .status {
-      padding: 10px 14px;
-      border-radius: 10px;
-      background: #e0f2fe;
-      color: #075985;
-      margin-bottom: 16px;
-      font-size: 14px;
-    }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .toolbar input[type="file"] {
-      background: white;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #d1d5db;
-    }
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 10px 16px;
-      cursor: pointer;
-      font-weight: 700;
-    }
+    body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; background: #f3f4f6; color: #111827; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .desc { margin: 0 0 16px; color: #4b5563; line-height: 1.6; }
+    .status { padding: 10px 14px; border-radius: 10px; background: #e0f2fe; color: #075985; margin-bottom: 16px; font-size: 14px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+    .toolbar input[type="file"] { background: white; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; }
+    button { border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 700; }
     .btn-primary { background: #2563eb; color: white; }
     .btn-success { background: #16a34a; color: white; }
     .btn-gray { background: #374151; color: white; }
-    .layout {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 20px;
-    }
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-    }
-    .canvas-wrap {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .panel-title {
-      margin: 0 0 10px;
-      font-size: 16px;
-    }
-    canvas {
-      width: 100%;
-      background: #fff;
-      border: 1px solid #d1d5db;
-      border-radius: 12px;
-    }
-    textarea {
-      width: 100%;
-      min-height: 640px;
-      resize: vertical;
-      border: 1px solid #d1d5db;
-      border-radius: 12px;
-      padding: 12px;
-      font-family: Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .small {
-      font-size: 13px;
-      color: #6b7280;
-      line-height: 1.6;
-      margin-top: 10px;
-    }
-    .list {
-      margin: 8px 0 0;
-      padding-left: 20px;
-      color: #374151;
-      font-size: 14px;
-      line-height: 1.7;
-    }
-    @media (max-width: 1000px) {
+    .layout { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
+    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .canvas-wrap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .panel-title { margin: 0 0 10px; font-size: 16px; }
+    canvas { width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; }
+    textarea { width: 100%; min-height: 640px; resize: vertical; border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
+    .small { font-size: 13px; color: #6b7280; line-height: 1.6; margin-top: 10px; }
+    .list { margin: 8px 0 0; padding-left: 18px; color: #374151; font-size: 14px; line-height: 1.7; }
+    @media (max-width: 1100px) {
       .layout { grid-template-columns: 1fr; }
-      .canvas-wrap { grid-template-columns: 1fr !important; }
+      .canvas-wrap { grid-template-columns: 1fr; }
       textarea { min-height: 360px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>電路圖影像辨識 → JSON</h1>
-    <p class="desc">
-      這是可直接打開的單檔版。先支援：上傳圖片、OpenCV.js 前處理、基本輪廓/線段分析、輸出電路 JSON 骨架。<br>
-      目前預設是「可運作 MVP」，真正的元件辨識你只要補模板圖或改成 AI 模型即可。
-    </p>
-
+    <h1>電路圖影像辨識 → JSON v4</h1>
+    <p class="desc">加強版：先做文字遮罩，再抓元件；圓形來源符號會嘗試區分 V / I；辨識後自動複製 JSON。</p>
     <div id="status" class="status">OpenCV.js 載入中…</div>
 
     <div class="toolbar">
@@ -132,7 +47,7 @@
 
     <div class="layout">
       <div class="card">
-        <div class="canvas-wrap" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="canvas-wrap">
           <div>
             <h3 class="panel-title">原始圖片</h3>
             <canvas id="srcCanvas" width="700" height="500"></canvas>
@@ -147,16 +62,14 @@
           </div>
         </div>
         <div class="small">
-          現在改成精簡版：只留一個圖片上傳，其他模式都內建自動啟用。<br>
-          內建流程固定執行：灰階、二值化、降噪、線段分析、文字干擾抑制、元件候選分類、JSON 預覽。
+          這版固定啟用：灰階、二值化、降噪、文字區域遮罩、線段分析、元件分類、OCR 數值辨識、JSON 預覽圖。
         </div>
         <ul class="list">
-          <li>不需要再選 AI 模式</li>
-          <li>不需要再上傳模板或輸入模型網址</li>
-          <li>辨識後會自動複製 JSON，按鈕可手動下載</li>
+          <li>只留一個圖片上傳，不用再選模型</li>
+          <li>會先盡量排除數字與文字，再抓元件</li>
+          <li>圓形來源元件會嘗試判斷是電壓源 V 還是電流源 I</li>
         </ul>
       </div>
-
       <div class="card">
         <h3 class="panel-title">輸出 JSON</h3>
         <textarea id="output"></textarea>
@@ -165,7 +78,6 @@
   </div>
 
   <script>
-    // OpenCV.js 初始化旗標
     window.Module = {
       onRuntimeInitialized() {
         window.cvReady = true;
@@ -175,21 +87,11 @@
     };
   </script>
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <script>
     const GRID = 20;
     const FREQ_HZ = 60;
-
-    // 你之後可以把模板圖資料放這裡
-    // 目前先留空，程式仍可跑示範模式
-    const TEMPLATE_CONFIG = {
-      R: null,
-      C: null,
-      V: null,
-      I: null,
-      L: null,
-      GND: null
-    };
 
     const statusEl = document.getElementById('status');
     const imageInput = document.getElementById('imageInput');
@@ -208,17 +110,9 @@
     let loadedImage = null;
     let lastResult = null;
 
-    function setStatus(text) {
-      statusEl.textContent = text;
-    }
-
-    function snap(v) {
-      return Math.round(v / GRID) * GRID;
-    }
-
-    function uid(prefix) {
-      return prefix + '_' + Math.random().toString(36).slice(2, 10);
-    }
+    function setStatus(text) { statusEl.textContent = text; }
+    function snap(v) { return Math.round(v / GRID) * GRID; }
+    function uid(prefix) { return prefix + '_' + Math.random().toString(36).slice(2, 10); }
 
     function clearCanvas(ctx, canvas) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -263,26 +157,29 @@
     });
 
     processBtn.addEventListener('click', async () => {
-      if (!window.cvReady) {
-        alert('OpenCV.js 尚未載入完成');
-        return;
-      }
-      if (!loadedImage) {
-        alert('請先上傳圖片');
-        return;
-      }
+      if (!window.cvReady) return alert('OpenCV.js 尚未載入完成');
+      if (!loadedImage) return alert('請先上傳圖片');
 
       try {
         setStatus('辨識中…');
-        const result = processCircuitImage();
+        const result = await processCircuitImage();
         lastResult = result;
         outputEl.value = JSON.stringify(result, null, 2);
         drawJsonPreview(result);
         const copied = await copyJsonToClipboard(result);
-        setStatus(copied ? '辨識完成，JSON 已自動複製' : '辨識完成，但自動複製失敗，可手動複製');
+        setStatus(copied ? '辨識完成，JSON 已自動複製' : '辨識完成，但自動複製失敗');
       } catch (err) {
         console.error(err);
         setStatus('辨識失敗：' + err.message);
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (lastResult) return exportJsonFile(lastResult, 'circuit.json');
+      try {
+        exportJsonFile(JSON.parse(outputEl.value || '{}'), 'circuit.json');
+      } catch (_) {
+        alert('目前沒有有效 JSON 可下載');
       }
     });
 
@@ -292,83 +189,78 @@
       outputEl.value = JSON.stringify(result, null, 2);
       drawDetectionOverlay(result);
       drawJsonPreview(result);
-      const copied = await copyJsonToClipboard(result);
-      setStatus(copied ? '已載入示範結果，JSON 已自動複製' : '已載入示範結果');
+      await copyJsonToClipboard(result);
+      setStatus('已載入示範結果，JSON 已自動複製');
     });
 
-    downloadBtn.addEventListener('click', () => {
-      if (lastResult) {
-        exportJsonFile(lastResult, 'circuit.json');
-        return;
-      }
-
-      const text = outputEl.value.trim();
-      if (!text) {
-        alert('目前沒有 JSON 可下載');
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(text);
-        exportJsonFile(parsed, 'circuit.json');
-      } catch (err) {
-        alert('JSON 格式有錯，無法下載');
-      }
-    });
-
-    function processCircuitImage() {
-      // === 1) 從 canvas 讀入影像 ===
+    async function processCircuitImage() {
       const src = cv.imread(srcCanvas);
       const gray = new cv.Mat();
-      const binary = new cv.Mat();
       const blurred = new cv.Mat();
-      const lines = new cv.Mat();
+      const binary = new cv.Mat();
+      const noText = new cv.Mat();
+      const linesMat = new cv.Mat();
+      const display = new cv.Mat();
 
-      // === 2) 前處理 ===
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
       cv.threshold(blurred, binary, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
 
-      // === 3) 偵測線段（水平/垂直導線骨架） ===
-      // 這裡先抓粗略線段，後續可再做合併與過濾
-      cv.HoughLinesP(binary, lines, 1, Math.PI / 180, 50, 30, 10);
+      const openKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(2, 2));
+      cv.morphologyEx(binary, binary, cv.MORPH_OPEN, openKernel);
+      openKernel.delete();
 
-      // 顯示處理結果到右邊畫布
-      const display = new cv.Mat();
-      cv.cvtColor(binary, display, cv.COLOR_GRAY2RGBA);
+      removeTextLikeContours(binary, noText);
+      cv.HoughLinesP(noText, linesMat, 1, Math.PI / 180, 55, 35, 12);
+
+      cv.cvtColor(noText, display, cv.COLOR_GRAY2RGBA);
       cv.imshow(dstCanvas, display);
 
-      // === 4) 分析線段 ===
-      const detectedLines = extractAxisAlignedLines(lines);
-
-      // === 5) 元件辨識 ===
-      // 目前先用骨架：如果尚未提供模板，就回退到示範辨識
-      let components = [];
-      if (hasAnyTemplate()) {
-        components = detectComponentsByTemplate(gray, display);
-      } else {
-        components = detectComponentsFromContours(binary);
-      }
-
-      // === 6) 由元件 + 線段生成 JSON ===
+      const detectedLines = extractAxisAlignedLines(linesMat);
+      const components = detectComponentsFromContours(noText);
       const result = buildCircuitJsonFromDetections(components, detectedLines);
-
-      // === 7) 疊圖標記 ===
+      await enrichComponentValuesWithOCR(result);
       drawDetectionOverlay(result);
 
-      // 釋放記憶體
-      src.delete();
-      gray.delete();
-      binary.delete();
-      blurred.delete();
-      lines.delete();
-      display.delete();
-
+      src.delete(); gray.delete(); blurred.delete(); binary.delete(); noText.delete(); linesMat.delete(); display.delete();
       return result;
     }
 
-    function hasAnyTemplate() {
-      return Object.values(TEMPLATE_CONFIG).some(v => !!v);
+    function removeTextLikeContours(srcBinary, outBinary) {
+      srcBinary.copyTo(outBinary);
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(srcBinary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const rect = cv.boundingRect(cnt);
+        const area = cv.contourArea(cnt);
+        const w = rect.width, h = rect.height;
+        const aspect = w / Math.max(h, 1);
+        const fillRatio = area / Math.max(w * h, 1);
+
+        const likelyText = (
+          (w >= 8 && w <= 95 && h >= 6 && h <= 22 && aspect >= 1.7) ||
+          (w >= 7 && w <= 18 && h >= 7 && h <= 24 && fillRatio > 0.08 && fillRatio < 0.72) ||
+          (w <= 14 && h <= 14)
+        );
+
+        if (likelyText) {
+          const pad = 2;
+          const x = Math.max(0, rect.x - pad);
+          const y = Math.max(0, rect.y - pad);
+          const ww = Math.min(outBinary.cols - x, rect.width + pad * 2);
+          const hh = Math.min(outBinary.rows - y, rect.height + pad * 2);
+          const roi = outBinary.roi(new cv.Rect(x, y, ww, hh));
+          roi.setTo(new cv.Scalar(0));
+          roi.delete();
+        }
+        cnt.delete();
+      }
+
+      contours.delete();
+      hierarchy.delete();
     }
 
     function extractAxisAlignedLines(linesMat) {
@@ -376,34 +268,19 @@
       for (let i = 0; i < linesMat.rows; i++) {
         const line = linesMat.data32S.slice(i * 4, i * 4 + 4);
         const [x1, y1, x2, y2] = line;
-
         const dx = Math.abs(x2 - x1);
         const dy = Math.abs(y2 - y1);
 
-        // 只保留接近水平/垂直的線
         if (dy <= 8) {
-          result.push({
-            x1: snap(Math.min(x1, x2)),
-            y1: snap((y1 + y2) / 2),
-            x2: snap(Math.max(x1, x2)),
-            y2: snap((y1 + y2) / 2),
-            orientation: 'H'
-          });
+          result.push({ x1: snap(Math.min(x1, x2)), y1: snap((y1 + y2) / 2), x2: snap(Math.max(x1, x2)), y2: snap((y1 + y2) / 2), orientation: 'H' });
         } else if (dx <= 8) {
-          result.push({
-            x1: snap((x1 + x2) / 2),
-            y1: snap(Math.min(y1, y2)),
-            x2: snap((x1 + x2) / 2),
-            y2: snap(Math.max(y1, y2)),
-            orientation: 'V'
-          });
+          result.push({ x1: snap((x1 + x2) / 2), y1: snap(Math.min(y1, y2)), x2: snap((x1 + x2) / 2), y2: snap(Math.max(y1, y2)), orientation: 'V' });
         }
       }
       return mergeNearbyLines(result);
     }
 
     function mergeNearbyLines(lines) {
-      // 簡單合併：同軸、距離近、重疊的線段合併
       let merged = [...lines];
       let changed = true;
 
@@ -416,36 +293,18 @@
             const b = merged[j];
             if (a.orientation !== b.orientation) continue;
 
-            if (a.orientation === 'H' && Math.abs(a.y1 - b.y1) <= GRID) {
-              const overlap = !(a.x2 < b.x1 - GRID || b.x2 < a.x1 - GRID);
-              if (overlap) {
-                merged[i] = {
-                  x1: Math.min(a.x1, b.x1),
-                  y1: snap((a.y1 + b.y1) / 2),
-                  x2: Math.max(a.x2, b.x2),
-                  y2: snap((a.y1 + b.y1) / 2),
-                  orientation: 'H'
-                };
-                merged.splice(j, 1);
-                changed = true;
-                break outer;
-              }
+            if (a.orientation === 'H' && Math.abs(a.y1 - b.y1) <= GRID && !(a.x2 < b.x1 - GRID || b.x2 < a.x1 - GRID)) {
+              merged[i] = { x1: Math.min(a.x1, b.x1), y1: snap((a.y1 + b.y1) / 2), x2: Math.max(a.x2, b.x2), y2: snap((a.y1 + b.y1) / 2), orientation: 'H' };
+              merged.splice(j, 1);
+              changed = true;
+              break outer;
             }
 
-            if (a.orientation === 'V' && Math.abs(a.x1 - b.x1) <= GRID) {
-              const overlap = !(a.y2 < b.y1 - GRID || b.y2 < a.y1 - GRID);
-              if (overlap) {
-                merged[i] = {
-                  x1: snap((a.x1 + b.x1) / 2),
-                  y1: Math.min(a.y1, b.y1),
-                  x2: snap((a.x1 + b.x1) / 2),
-                  y2: Math.max(a.y2, b.y2),
-                  orientation: 'V'
-                };
-                merged.splice(j, 1);
-                changed = true;
-                break outer;
-              }
+            if (a.orientation === 'V' && Math.abs(a.x1 - b.x1) <= GRID && !(a.y2 < b.y1 - GRID || b.y2 < a.y1 - GRID)) {
+              merged[i] = { x1: snap((a.x1 + b.x1) / 2), y1: Math.min(a.y1, b.y1), x2: snap((a.x1 + b.x1) / 2), y2: Math.max(a.y2, b.y2), orientation: 'V' };
+              merged.splice(j, 1);
+              changed = true;
+              break outer;
             }
           }
         }
@@ -454,27 +313,14 @@
       return merged;
     }
 
-    function detectComponentsByTemplate(grayMat, displayMat) {
-      // 真正的模板辨識入口
-      // 你之後把模板圖載入成 Mat 後，可在此用 cv.matchTemplate()
-      // 如果模板已設定，目前先回退到輪廓候選辨識，避免輸出假資料
-      return detectComponentsFromContours(grayMat);
-    }
-
-    function detectComponentsFromContours(binaryLikeMat) {
-      const srcMat = binaryLikeMat.clone ? binaryLikeMat.clone() : binaryLikeMat;
+    function detectComponentsFromContours(binaryMat) {
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       const results = [];
       const usedCenters = [];
+      const counts = { R: 0, C: 0, V: 0, I: 0, L: 0, GND: 0 };
 
-      cv.findContours(srcMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      let rCount = 0;
-      let cCount = 0;
-      let vCount = 0;
-      let lCount = 0;
-      let gCount = 0;
+      cv.findContours(binaryMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
       for (let i = 0; i < contours.size(); i++) {
         const cnt = contours.get(i);
@@ -484,103 +330,46 @@
         const h = rect.height;
         const cx = snap(rect.x + w / 2);
         const cy = snap(rect.y + h / 2);
+        const fillRatio = area / Math.max(w * h, 1);
+        const aspect = w / Math.max(h, 1);
 
-        if (w < 10 || h < 10) {
-          cnt.delete();
-          continue;
-        }
-        if (w > srcCanvas.width * 0.5 || h > srcCanvas.height * 0.5) {
-          cnt.delete();
-          continue;
-        }
+        if (w < 12 || h < 12) { cnt.delete(); continue; }
+        if (w > srcCanvas.width * 0.55 || h > srcCanvas.height * 0.55) { cnt.delete(); continue; }
+        if ((w > 100 && h < 10) || (h > 100 && w < 10)) { cnt.delete(); continue; }
 
-        // 細長導線直接排除
-        if ((w > 90 && h < 10) || (h > 90 && w < 10)) {
-          cnt.delete();
-          continue;
-        }
+        if (usedCenters.some(p => Math.abs(p.x - cx) <= GRID && Math.abs(p.y - cy) <= GRID)) { cnt.delete(); continue; }
 
-        // 很像文字區塊：寬而扁、面積不大，直接排除
-        if (w >= 24 && h <= 22 && w / h >= 1.8 && area < 900) {
-          cnt.delete();
-          continue;
-        }
+        let type = null;
+        let rotation = 0;
 
-        const fillRatio = area / (w * h);
-        const aspect = w / h;
-
-        const duplicate = usedCenters.some(p => Math.abs(p.x - cx) <= GRID && Math.abs(p.y - cy) <= GRID);
-        if (duplicate) {
-          cnt.delete();
-          continue;
+        if (w >= 26 && h >= 26 && aspect > 0.78 && aspect < 1.22 && fillRatio > 0.30 && fillRatio < 0.88) {
+          type = detectSourceSubtype(rect);
+          rotation = 90;
+        } else if (w >= 22 && w <= 72 && h >= 8 && h <= 24 && aspect >= 1.7 && fillRatio < 0.42) {
+          type = 'C';
+          rotation = 0;
+        } else if (h >= 34 && h <= 100 && w >= 10 && w <= 24 && fillRatio >= 0.06 && fillRatio < 0.30) {
+          type = 'L';
+          rotation = 90;
+        } else if (h >= 34 && h <= 118 && w >= 12 && w <= 34 && fillRatio >= 0.18 && fillRatio <= 0.76) {
+          type = 'R';
+          rotation = 90;
+        } else if (cy > srcCanvas.height * 0.55 && w >= 16 && w <= 54 && h >= 10 && h <= 24 && fillRatio < 0.36) {
+          type = 'GND';
+          rotation = 0;
         }
 
-        let item = null;
-
-        
-        // 近似圓形，且尺寸夠大：電壓源/電流源候選
-        if (w >= 24 && h >= 24 && aspect > 0.75 && aspect < 1.25 && fillRatio > 0.45 && fillRatio < 0.9) {
-          vCount += 1;
-          item = {
-            type: 'V',
-            name: 'V' + vCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // 電容：短高、偏橫向，不要太寬避免吃到文字
-        else if (w >= 20 && w <= 60 && h >= 8 && h <= 26 && aspect >= 1.5 && fillRatio < 0.55) {
-          cCount += 1;
-          item = {
-            type: 'C',
-            name: 'C' + cCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 0
-          };
-        }
-        // 電感：窄、較高、填充率偏低
-        else if (h >= 30 && h <= 95 && w >= 10 && w <= 28 && fillRatio >= 0.12 && fillRatio < 0.42) {
-          lCount += 1;
-          item = {
-            type: 'L',
-            name: 'L' + lCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // 電阻：直向長條，但比電感略厚
-        else if (h >= 34 && h <= 110 && w >= 12 && w <= 36 && fillRatio >= 0.2 && fillRatio <= 0.75) {
-          rCount += 1;
-          item = {
-            type: 'R',
-            name: 'R' + rCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // GND：只在下半部抓，避免把文字橫線當成 GND
-        else if (cy > srcCanvas.height * 0.45 && w >= 16 && w <= 48 && h >= 10 && h <= 24 && fillRatio < 0.4) {
-          gCount += 1;
-          item = {
-            type: 'GND',
-            name: 'GND',
-            x: cx,
-            y: cy + 20,
-            rotation: 0
-          };
-        }
-
-        if (item) {
+        if (type) {
+          counts[type] += 1;
           usedCenters.push({ x: cx, y: cy });
-          results.push(item);
+          results.push({
+            type,
+            name: type === 'GND' ? 'GND' : type + counts[type],
+            value: '',
+            x: cx,
+            y: type === 'GND' ? cy + 20 : cy,
+            rotation
+          });
         }
 
         cnt.delete();
@@ -588,36 +377,75 @@
 
       contours.delete();
       hierarchy.delete();
-      if (srcMat !== binaryLikeMat) srcMat.delete();
-
       return results;
     }
 
-    function makeElement({ type, name, value, x, y, rotation = 0 }) {
-      x = snap(x);
-      y = snap(y);
+    function detectSourceSubtype(rect) {
+      const pad = 2;
+      const left = Math.max(0, rect.x + pad);
+      const top = Math.max(0, rect.y + pad);
+      const width = Math.max(1, Math.min(srcCanvas.width - left, rect.width - pad * 2));
+      const height = Math.max(1, Math.min(srcCanvas.height - top, rect.height - pad * 2));
 
-      if (type === 'GND') {
-        return {
-          id: uid('gnd'),
-          type: 'GND',
-          name: 'GND',
-          p: { x, y: snap(y - 20) },
-          x,
-          y
-        };
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      const cx = c.getContext('2d');
+      cx.drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
+
+      const src = cv.imread(c);
+      const gray = new cv.Mat();
+      const bin = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.threshold(gray, bin, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(bin, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+      let hasTriangle = false;
+      let plusLikeScore = 0;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if (area < 8) { cnt.delete(); continue; }
+
+        const peri = cv.arcLength(cnt, true);
+        const approx = new cv.Mat();
+        cv.approxPolyDP(cnt, approx, 0.04 * peri, true);
+        const r = cv.boundingRect(cnt);
+        const aspect = r.width / Math.max(r.height, 1);
+
+        if (approx.rows === 3 && area > 12) hasTriangle = true;
+        if ((aspect > 2.2 && r.height <= 4) || (aspect < 0.45 && r.width <= 4)) plusLikeScore += 1;
+
+        approx.delete();
+        cnt.delete();
       }
 
-      const el = {
-        id: uid(type.toLowerCase()),
-        type,
-        name,
-        value,
-        rotation,
-        x,
-        y
-      };
+      contours.delete();
+      hierarchy.delete();
+      src.delete();
+      gray.delete();
+      bin.delete();
 
+      if (hasTriangle) return 'I';
+      if (plusLikeScore >= 2) return 'V';
+      return 'V';
+    }
+
+    function makeElement(def) {
+      const type = def.type;
+      const x = snap(def.x);
+      const y = snap(def.y);
+      const rotation = def.rotation || 0;
+
+      if (type === 'GND') {
+        return { id: uid('gnd'), type: 'GND', name: 'GND', p: { x, y: snap(y - 20) }, x, y };
+      }
+
+      const el = { id: uid(type.toLowerCase()), type, name: def.name, value: def.value || '', rotation, x, y };
       if (rotation === 0 || rotation === 180) {
         el.a = { x: snap(x - 80), y };
         el.b = { x: snap(x + 80), y };
@@ -625,217 +453,89 @@
         el.a = { x, y: snap(y + 80) };
         el.b = { x, y: snap(y - 80) };
       }
-
       return el;
     }
 
     function makeWire(points) {
-      return {
-        id: uid('w'),
-        points: points.map(p => ({ x: snap(p.x), y: snap(p.y) }))
-      };
+      return { id: uid('w'), points: points.map(p => ({ x: snap(p.x), y: snap(p.y) })) };
     }
 
     function buildCircuitJsonFromDetections(componentDefs, detectedLines) {
       const elements = componentDefs.map(makeElement);
-
-      // 先嘗試從偵測線段轉 wire，若太少就回退到元件推線
       let wires = detectedLines
         .filter(line => Math.hypot(line.x2 - line.x1, line.y2 - line.y1) >= GRID)
-        .map(line => makeWire([
-          { x: line.x1, y: line.y1 },
-          { x: line.x2, y: line.y2 }
-        ]));
+        .map(line => makeWire([{ x: line.x1, y: line.y1 }, { x: line.x2, y: line.y2 }]));
 
       if (wires.length < 3 && elements.length >= 2) {
         const inferred = inferWiresFromElements(elements);
         if (inferred.length) wires = inferred;
       }
 
-      return {
-        version: 1,
-        grid: GRID,
-        freqHz: FREQ_HZ,
-        elements,
-        wires,
-        junctions: []
-      };
+      return { version: 1, grid: GRID, freqHz: FREQ_HZ, elements, wires, junctions: [] };
     }
 
     function inferWiresFromElements(elements) {
-      const findByType = type => elements.filter(e => e.type === type);
-
-      const i = findByType('I')[0];
-      const r = findByType('R')[0];
-      const l = findByType('L')[0];
-      const c = findByType('C')[0];
-      const v = findByType('V')[0];
-      const g = findByType('GND')[0];
-
+      const pick = t => elements.filter(e => e.type === t);
+      const v = pick('V')[0];
+      const i = pick('I')[0];
+      const r1 = pick('R')[0];
+      const r2 = pick('R')[1];
+      const l = pick('L')[0];
+      const c = pick('C')[0];
+      const g = pick('GND')[0];
+      const srcEl = v || i;
       const wires = [];
 
-      if (i && r) wires.push(makeWire([i.b, { x: r.a.x, y: i.b.y }]));
-      if (r && c) wires.push(makeWire([{ x: r.a.x + 20, y: r.a.y }, c.a]));
-      if (l && c) wires.push(makeWire([{ x: l.a.x, y: c.a.y }, c.a]));
-      if (c && v) wires.push(makeWire([c.b, v.b]));
-      if (i && r) wires.push(makeWire([i.a, r.b]));
-      if (r && l) wires.push(makeWire([r.b, l.b]));
-      if (r && v) wires.push(makeWire([r.b, v.a]));
-      if (l && g) wires.push(makeWire([l.b, g.p]));
-      if (r && g) wires.push(makeWire([r.b, g.p]));
+      if (srcEl && r1) wires.push(makeWire([srcEl.b, r1.a]));
+      if (r1 && c) wires.push(makeWire([r1.b, c.a]));
+      if (c && r2) wires.push(makeWire([c.b, r2.b]));
+      if (srcEl && r2) wires.push(makeWire([srcEl.a, r2.a]));
+      if (l && r1) wires.push(makeWire([l.b, { x: r1.b.x, y: l.b.y }]));
+      if (l && srcEl) wires.push(makeWire([l.a, { x: srcEl.a.x + 280, y: l.a.y }]));
+      if (l && g) wires.push(makeWire([l.a, g.p]));
 
       return wires;
     }
 
-    function drawJsonPreview(result) {
-      clearCanvas(previewCtx, previewCanvas);
-      previewCtx.strokeStyle = '#e5e7eb';
-      previewCtx.lineWidth = 1;
-      for (let x = 0; x <= previewCanvas.width; x += GRID) {
-        previewCtx.beginPath();
-        previewCtx.moveTo(x, 0);
-        previewCtx.lineTo(x, previewCanvas.height);
-        previewCtx.stroke();
-      }
-      for (let y = 0; y <= previewCanvas.height; y += GRID) {
-        previewCtx.beginPath();
-        previewCtx.moveTo(0, y);
-        previewCtx.lineTo(previewCanvas.width, y);
-        previewCtx.stroke();
-      }
+    async function enrichComponentValuesWithOCR(result) {
+      if (!window.Tesseract || !result?.elements?.length) return;
 
-      previewCtx.strokeStyle = '#2563eb';
-      previewCtx.lineWidth = 3;
-      for (const wire of result.wires || []) {
-        if (!wire.points || wire.points.length < 2) continue;
-        previewCtx.beginPath();
-        previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) {
-          previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        }
-        previewCtx.stroke();
-      }
-
-      for (const el of result.elements || []) {
-        drawSymbol(previewCtx, el);
-      }
-    }
-
-    function drawSymbol(ctx, el) {
-      ctx.save();
-      ctx.translate(el.x, el.y);
-      ctx.strokeStyle = '#111827';
-      ctx.fillStyle = '#111827';
-      ctx.lineWidth = 3;
-      ctx.font = '14px Arial';
-
-      if (el.type === 'R') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -25);
-        let y = -25;
-        const step = 8;
-        const amp = 10;
-        for (let i = 0; i < 6; i++) {
-          ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step);
-          y += step;
-        }
-        ctx.lineTo(0, 25); ctx.lineTo(0, 40);
-        ctx.stroke();
-      } else if (el.type === 'L') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -22);
-        ctx.stroke();
-        for (let i = 0; i < 4; i++) {
-          ctx.beginPath();
-          ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true);
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.moveTo(0, 22); ctx.lineTo(0, 40);
-        ctx.stroke();
-      } else if (el.type === 'C') {
-        ctx.beginPath();
-        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
-        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
-        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
-        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
-        ctx.stroke();
-      } else if (el.type === 'V' || el.type === 'I') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -20);
-        ctx.moveTo(0, 20); ctx.lineTo(0, 40);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, 0, 20, 0, Math.PI * 2);
-        ctx.stroke();
-        if (el.type === 'V') {
-          ctx.fillText('+', 10, 4);
-          ctx.fillText('-', -16, 4);
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(0, 8);
-          ctx.lineTo(0, -8);
-          ctx.lineTo(-8, 0);
-          ctx.moveTo(0, -8);
-          ctx.lineTo(8, 0);
-          ctx.stroke();
-        }
-      } else if (el.type === 'GND') {
-        ctx.beginPath();
-        ctx.moveTo(0, -20); ctx.lineTo(0, 0);
-        ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
-        ctx.moveTo(-10, 8); ctx.lineTo(10, 8);
-        ctx.moveTo(-5, 16); ctx.lineTo(5, 16);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(-16, -16, 32, 32);
-      }
-
-      ctx.fillText(el.name || el.type, 14, -14);
-      ctx.restore();
-    }
-
-    function drawDetectionOverlay(result) {
-      if (loadedImage) {
-        fitAndDrawImage(loadedImage, dstCtx, dstCanvas);
-      } else {
-        clearCanvas(dstCtx, dstCanvas);
-      }
-
-      // 畫 wire
-      dstCtx.strokeStyle = '#2563eb';
-      dstCtx.lineWidth = 2;
-      for (const wire of result.wires) {
-        if (!wire.points || wire.points.length < 2) continue;
-        dstCtx.beginPath();
-        dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) {
-          dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        }
-        dstCtx.stroke();
-      }
-
-      // 畫元件
       for (const el of result.elements) {
-        dstCtx.strokeStyle = '#dc2626';
-        dstCtx.lineWidth = 2;
-        dstCtx.strokeRect(el.x - 24, el.y - 24, 48, 48);
-
-        dstCtx.fillStyle = '#dc2626';
-        dstCtx.font = '14px Arial';
-        dstCtx.fillText(`${el.type}:${el.name}`, el.x + 8, el.y - 8);
-
-        const pts = [];
-        if (el.a) pts.push(el.a);
-        if (el.b) pts.push(el.b);
-        if (el.p) pts.push(el.p);
-
-        for (const p of pts) {
-          dstCtx.beginPath();
-          dstCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-          dstCtx.fill();
+        if (el.type === 'GND') continue;
+        try {
+          const crop = cropRegionNearElement(el);
+          if (!crop) continue;
+          const ocr = await Tesseract.recognize(crop, 'eng', { logger: () => {} });
+          const text = cleanOcrText((ocr && ocr.data && ocr.data.text) || '');
+          if (text) el.value = text;
+        } catch (err) {
+          console.error('ocr failed', err);
         }
       }
+    }
+
+    function cropRegionNearElement(el) {
+      const pad = 70;
+      const left = Math.max(0, el.x - pad);
+      const top = Math.max(0, el.y - pad);
+      const width = Math.min(srcCanvas.width - left, pad * 2);
+      const height = Math.min(srcCanvas.height - top, pad * 2);
+      if (width <= 10 || height <= 10) return null;
+
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      const cx = c.getContext('2d');
+      cx.drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
+      return c;
+    }
+
+    function cleanOcrText(text) {
+      return (text || '')
+        .replace(/\s+/g, ' ')
+        .replace(/[^0-9a-zA-Z+\-\.jJΩ∠ ]/g, '')
+        .trim()
+        .slice(0, 24);
     }
 
     async function copyJsonToClipboard(data) {
@@ -845,7 +545,6 @@
           await navigator.clipboard.writeText(jsonText);
           return true;
         }
-
         const ta = document.createElement('textarea');
         ta.value = jsonText;
         ta.style.position = 'fixed';
@@ -863,8 +562,7 @@
     }
 
     function exportJsonFile(data, filename = 'circuit.json') {
-      const jsonText = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonText], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -875,86 +573,132 @@
       URL.revokeObjectURL(url);
     }
 
+    function drawDetectionOverlay(result) {
+      if (loadedImage) fitAndDrawImage(loadedImage, dstCtx, dstCanvas);
+      else clearCanvas(dstCtx, dstCanvas);
+
+      dstCtx.strokeStyle = '#2563eb';
+      dstCtx.lineWidth = 2;
+      for (const wire of (result.wires || [])) {
+        if (!wire.points || wire.points.length < 2) continue;
+        dstCtx.beginPath();
+        dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
+        for (let i = 1; i < wire.points.length; i++) dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
+        dstCtx.stroke();
+      }
+
+      for (const el of (result.elements || [])) {
+        dstCtx.strokeStyle = '#dc2626';
+        dstCtx.lineWidth = 2;
+        dstCtx.strokeRect(el.x - 24, el.y - 24, 48, 48);
+        dstCtx.fillStyle = '#dc2626';
+        dstCtx.font = '14px Arial';
+        dstCtx.fillText((el.type || '?') + ':' + (el.name || ''), el.x + 8, el.y - 8);
+      }
+    }
+
+    function drawJsonPreview(result) {
+      clearCanvas(previewCtx, previewCanvas);
+      previewCtx.strokeStyle = '#e5e7eb';
+      previewCtx.lineWidth = 1;
+      for (let x = 0; x <= previewCanvas.width; x += GRID) { previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke(); }
+      for (let y = 0; y <= previewCanvas.height; y += GRID) { previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke(); }
+
+      previewCtx.strokeStyle = '#2563eb';
+      previewCtx.lineWidth = 3;
+      for (const wire of (result.wires || [])) {
+        if (!wire.points || wire.points.length < 2) continue;
+        previewCtx.beginPath();
+        previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
+        for (let i = 1; i < wire.points.length; i++) previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
+        previewCtx.stroke();
+      }
+
+      for (const el of (result.elements || [])) drawSymbol(previewCtx, el);
+    }
+
+    function drawSymbol(ctx, el) {
+      ctx.save();
+      ctx.translate(el.x, el.y);
+      ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+      ctx.strokeStyle = '#111827';
+      ctx.fillStyle = '#111827';
+      ctx.lineWidth = 3;
+      ctx.font = '14px Arial';
+
+      if (el.type === 'R') {
+        ctx.beginPath();
+        ctx.moveTo(0, -40); ctx.lineTo(0, -25);
+        let y = -25; const step = 8; const amp = 10;
+        for (let i = 0; i < 6; i++) { ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step); y += step; }
+        ctx.lineTo(0, 25); ctx.lineTo(0, 40); ctx.stroke();
+      } else if (el.type === 'L') {
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -22); ctx.stroke();
+        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true); ctx.stroke(); }
+        ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 40); ctx.stroke();
+      } else if (el.type === 'C') {
+        ctx.beginPath();
+        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
+        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
+        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
+        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
+        ctx.stroke();
+      } else if (el.type === 'V' || el.type === 'I') {
+        ctx.beginPath();
+        ctx.moveTo(0, -40); ctx.lineTo(0, -20);
+        ctx.moveTo(0, 20); ctx.lineTo(0, 40);
+        ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.stroke();
+        if (el.type === 'V') {
+          ctx.fillText('+', 10, 4);
+          ctx.fillText('-', -16, 4);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(0, 8); ctx.lineTo(0, -8);
+          ctx.lineTo(-8, 0);
+          ctx.moveTo(0, -8); ctx.lineTo(8, 0);
+          ctx.stroke();
+        }
+      } else if (el.type === 'GND') {
+        ctx.beginPath();
+        ctx.moveTo(0, -20); ctx.lineTo(0, 0);
+        ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
+        ctx.moveTo(-10, 8); ctx.lineTo(10, 8);
+        ctx.moveTo(-5, 16); ctx.lineTo(5, 16);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(-16, -16, 32, 32);
+      }
+
+      ctx.rotate(-((el.rotation || 0) * Math.PI) / 180);
+      ctx.fillText(el.name || el.type, 14, -14);
+      ctx.restore();
+    }
+
     function buildDemoCircuit() {
       return {
         version: 1,
         grid: 20,
         freqHz: 60,
         elements: [
-          {
-            id: uid('i'),
-            type: 'I',
-            name: 'I1',
-            value: '12',
-            rotation: 270,
-            x: 300,
-            y: 280,
-            a: { x: 300, y: 360 },
-            b: { x: 300, y: 200 }
-          },
-          {
-            id: uid('r'),
-            type: 'R',
-            name: 'R1',
-            value: '4',
-            rotation: 90,
-            x: 460,
-            y: 280,
-            a: { x: 460, y: 360 },
-            b: { x: 460, y: 200 }
-          },
-          {
-            id: uid('v'),
-            type: 'V',
-            name: 'V1',
-            value: '3.4641 + 2j',
-            rotation: 90,
-            x: 720,
-            y: 280,
-            a: { x: 720, y: 360 },
-            b: { x: 720, y: 200 }
-          },
-          {
-            id: uid('c'),
-            type: 'C',
-            name: 'C1',
-            value: '-2j',
-            rotation: 0,
-            x: 600,
-            y: 200,
-            a: { x: 520, y: 200 },
-            b: { x: 680, y: 200 }
-          },
-          {
-            id: uid('gnd'),
-            type: 'GND',
-            name: 'GND',
-            p: { x: 460, y: 360 },
-            x: 460,
-            y: 380
-          }
+          { id: uid('v'), type: 'V', name: 'V1', value: '12∠60', rotation: 90, x: 180, y: 280, a: { x: 180, y: 360 }, b: { x: 180, y: 200 } },
+          { id: uid('r'), type: 'R', name: 'R1', value: '4', rotation: 0, x: 340, y: 200, a: { x: 260, y: 200 }, b: { x: 420, y: 200 } },
+          { id: uid('l'), type: 'L', name: 'L1', value: 'j2', rotation: 90, x: 460, y: 280, a: { x: 460, y: 360 }, b: { x: 460, y: 200 } },
+          { id: uid('c'), type: 'C', name: 'C1', value: '-j2', rotation: 0, x: 620, y: 200, a: { x: 540, y: 200 }, b: { x: 700, y: 200 } },
+          { id: uid('r'), type: 'R', name: 'R2', value: '2', rotation: 90, x: 780, y: 280, a: { x: 780, y: 360 }, b: { x: 780, y: 200 } }
         ],
         wires: [
-          { id: uid('w'), points: [{ x: 300, y: 200 }, { x: 460, y: 200 }] },
-          { id: uid('w'), points: [{ x: 480, y: 200 }, { x: 520, y: 200 }] },
-          { id: uid('w'), points: [{ x: 680, y: 200 }, { x: 720, y: 200 }] },
-          { id: uid('w'), points: [{ x: 300, y: 360 }, { x: 460, y: 360 }] },
-          { id: uid('w'), points: [{ x: 460, y: 360 }, { x: 720, y: 360 }] }
+          { id: uid('w'), points: [{ x: 180, y: 200 }, { x: 260, y: 200 }] },
+          { id: uid('w'), points: [{ x: 420, y: 200 }, { x: 540, y: 200 }] },
+          { id: uid('w'), points: [{ x: 700, y: 200 }, { x: 780, y: 200 }] },
+          { id: uid('w'), points: [{ x: 180, y: 360 }, { x: 780, y: 360 }] },
+          { id: uid('w'), points: [{ x: 460, y: 200 }, { x: 460, y: 360 }] }
         ],
         junctions: []
       };
     }
 
-    // 預設放一個空 JSON，避免右側空白
-    outputEl.value = JSON.stringify({
-      version: 1,
-      grid: 20,
-      freqHz: 60,
-      elements: [],
-      wires: [],
-      junctions: []
-    }, null, 2);
-
+    outputEl.value = JSON.stringify({ version: 1, grid: 20, freqHz: 60, elements: [], wires: [], junctions: [] }, null, 2);
     clearCanvas(srcCtx, srcCanvas);
     clearCanvas(dstCtx, dstCanvas);
     clearCanvas(previewCtx, previewCanvas);
