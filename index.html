@@ -270,7 +270,8 @@
         const result = processCircuitImage();
         lastResult = result;
         outputEl.value = JSON.stringify(result, null, 2);
-        setStatus('辨識完成（目前為 MVP 骨架，可再加模板辨識）');
+        exportJsonFile(result, 'circuit.json');
+        setStatus('辨識完成，已自動下載 JSON');
       } catch (err) {
         console.error(err);
         setStatus('辨識失敗：' + err.message);
@@ -286,18 +287,23 @@
     });
 
     downloadBtn.addEventListener('click', () => {
+      if (lastResult) {
+        exportJsonFile(lastResult, 'circuit.json');
+        return;
+      }
+
       const text = outputEl.value.trim();
       if (!text) {
         alert('目前沒有 JSON 可下載');
         return;
       }
-      const blob = new Blob([text], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'circuit.json';
-      a.click();
-      URL.revokeObjectURL(url);
+
+      try {
+        const parsed = JSON.parse(text);
+        exportJsonFile(parsed, 'circuit.json');
+      } catch (err) {
+        alert('JSON 格式有錯，無法下載');
+      }
     });
 
     function processCircuitImage() {
@@ -586,6 +592,19 @@
           dstCtx.fill();
         }
       }
+    }
+
+    function exportJsonFile(data, filename = 'circuit.json') {
+      const jsonText = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonText], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function buildDemoCircuit() {
