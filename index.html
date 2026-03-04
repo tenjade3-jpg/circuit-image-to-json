@@ -3,131 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>電路圖影像辨識轉 JSON</title>
+  <title>電路圖影像辨識轉 JSON v2</title>
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, "Microsoft JhengHei", sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-    }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-    }
-    .desc {
-      margin: 0 0 16px;
-      color: #4b5563;
-      line-height: 1.6;
-    }
-    .status {
-      padding: 10px 14px;
-      border-radius: 10px;
-      background: #e0f2fe;
-      color: #075985;
-      margin-bottom: 16px;
-      font-size: 14px;
-    }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .toolbar input[type="file"] {
-      background: white;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #d1d5db;
-    }
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 10px 16px;
-      cursor: pointer;
-      font-weight: 700;
-    }
+    body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; background: #f3f4f6; color: #111827; }
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .desc { margin: 0 0 16px; color: #4b5563; line-height: 1.6; }
+    .status { padding: 10px 14px; border-radius: 10px; background: #e0f2fe; color: #075985; margin-bottom: 16px; font-size: 14px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+    .toolbar input[type="file"], .toolbar input[type="text"] { background: white; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; }
+    .toolbar input[type="text"] { min-width: 320px; }
+    .toggle { display:flex; align-items:center; gap:6px; background:white; padding:10px 12px; border:1px solid #d1d5db; border-radius:10px; }
+    button { border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 700; }
     .btn-primary { background: #2563eb; color: white; }
     .btn-success { background: #16a34a; color: white; }
     .btn-gray { background: #374151; color: white; }
-    .layout {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 20px;
-    }
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-    }
-    .canvas-wrap {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .panel-title {
-      margin: 0 0 10px;
-      font-size: 16px;
-    }
-    canvas {
-      width: 100%;
-      background: #fff;
-      border: 1px solid #d1d5db;
-      border-radius: 12px;
-    }
-    textarea {
-      width: 100%;
-      min-height: 640px;
-      resize: vertical;
-      border: 1px solid #d1d5db;
-      border-radius: 12px;
-      padding: 12px;
-      font-family: Consolas, monospace;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .small {
-      font-size: 13px;
-      color: #6b7280;
-      line-height: 1.6;
-      margin-top: 10px;
-    }
-    .list {
-      margin: 8px 0 0;
-      padding-left: 20px;
-      color: #374151;
-      font-size: 14px;
-      line-height: 1.7;
-    }
-    @media (max-width: 1000px) {
+    .layout { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
+    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .canvas-wrap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .panel-title { margin: 0 0 10px; font-size: 16px; }
+    canvas { width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; }
+    textarea { width: 100%; min-height: 640px; resize: vertical; border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
+    .small { font-size: 13px; color: #6b7280; line-height: 1.6; margin-top: 10px; }
+    code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+    @media (max-width: 1100px) {
       .layout { grid-template-columns: 1fr; }
-      .canvas-wrap { grid-template-columns: 1fr !important; }
-      textarea { min-height: 360px; }
-    }
       .canvas-wrap { grid-template-columns: 1fr; }
       textarea { min-height: 360px; }
+      .toolbar input[type="text"] { min-width: 0; width: 100%; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>電路圖影像辨識 → JSON</h1>
-    <p class="desc">
-      這是可直接打開的單檔版。先支援：上傳圖片、OpenCV.js 前處理、基本輪廓/線段分析、輸出電路 JSON 骨架。<br>
-      目前預設是「可運作 MVP」，真正的元件辨識你只要補模板圖或改成 AI 模型即可。
-    </p>
-
+    <h1>電路圖影像辨識 → JSON v2</h1>
+    <p class="desc">支援：模板比對、OCR 數值辨識、可接 TensorFlow.js 模型、JSON 預覽圖、JSON 自動複製。</p>
     <div id="status" class="status">OpenCV.js 載入中…</div>
 
     <div class="toolbar">
       <input type="file" id="imageInput" accept="image/*" />
+      <input type="file" id="templateInput" accept="image/*" multiple />
+      <input type="text" id="modelUrlInput" placeholder="AI 模型網址（可選，model.json）" />
+      <button class="btn-gray" id="loadModelBtn">載入 AI 模型</button>
+      <label class="toggle"><input type="checkbox" id="ocrToggle" checked /> OCR</label>
+      <label class="toggle"><input type="checkbox" id="aiToggle" /> AI</label>
       <button class="btn-primary" id="processBtn" disabled>開始辨識</button>
       <button class="btn-success" id="downloadBtn">下載 JSON</button>
       <button class="btn-gray" id="demoBtn">載入示範結果</button>
@@ -135,7 +55,7 @@
 
     <div class="layout">
       <div class="card">
-        <div class="canvas-wrap" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="canvas-wrap">
           <div>
             <h3 class="panel-title">原始圖片</h3>
             <canvas id="srcCanvas" width="700" height="500"></canvas>
@@ -150,16 +70,10 @@
           </div>
         </div>
         <div class="small">
-          建議圖片條件：白底、黑線、線條清楚、元件角度以 0/90/180/270 度為主。<br>
-          若要提高辨識率，後續請把你的 R / C / V / I / GND 小圖模板加入程式中的 <code>TEMPLATE_CONFIG</code>。
+          模板檔名請用：<code>r.png</code>、<code>c.png</code>、<code>v.png</code>、<code>i.png</code>、<code>l.png</code>、<code>gnd.png</code>。<br>
+          AI 模型為可選，若有自訓練的 TensorFlow.js 分類模型可直接掛入。OCR 會讀取元件附近區域的文字當 value。
         </div>
-        <ul class="list">
-          <li>現在這版會先做：灰階、二值化、去雜訊、邊線分析</li>
-          <li>內建：示範用的元件輸出格式與自動產生 wires</li>
-          <li>下一步可升級：模板比對、OCR 數值辨識、AI 模型</li>
-        </ul>
       </div>
-
       <div class="card">
         <h3 class="panel-title">輸出 JSON</h3>
         <textarea id="output"></textarea>
@@ -168,7 +82,6 @@
   </div>
 
   <script>
-    // OpenCV.js 初始化旗標
     window.Module = {
       onRuntimeInitialized() {
         window.cvReady = true;
@@ -178,24 +91,20 @@
     };
   </script>
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 
   <script>
     const GRID = 20;
     const FREQ_HZ = 60;
 
-    // 你之後可以把模板圖資料放這裡
-    // 目前先留空，程式仍可跑示範模式
-    const TEMPLATE_CONFIG = {
-      R: null,
-      C: null,
-      V: null,
-      I: null,
-      L: null,
-      GND: null
-    };
-
     const statusEl = document.getElementById('status');
     const imageInput = document.getElementById('imageInput');
+    const templateInput = document.getElementById('templateInput');
+    const modelUrlInput = document.getElementById('modelUrlInput');
+    const loadModelBtn = document.getElementById('loadModelBtn');
+    const ocrToggle = document.getElementById('ocrToggle');
+    const aiToggle = document.getElementById('aiToggle');
     const processBtn = document.getElementById('processBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const demoBtn = document.getElementById('demoBtn');
@@ -210,18 +119,12 @@
 
     let loadedImage = null;
     let lastResult = null;
+    let loadedTemplates = {};
+    let aiModel = null;
 
-    function setStatus(text) {
-      statusEl.textContent = text;
-    }
-
-    function snap(v) {
-      return Math.round(v / GRID) * GRID;
-    }
-
-    function uid(prefix) {
-      return prefix + '_' + Math.random().toString(36).slice(2, 10);
-    }
+    function setStatus(text) { statusEl.textContent = text; }
+    function snap(v) { return Math.round(v / GRID) * GRID; }
+    function uid(prefix) { return prefix + '_' + Math.random().toString(36).slice(2, 10); }
 
     function clearCanvas(ctx, canvas) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -253,6 +156,76 @@
       });
     }
 
+    function fileToImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    function normalizeTemplateKey(name) {
+      const n = name.toLowerCase();
+      if (n.startsWith('r')) return 'R';
+      if (n.startsWith('c')) return 'C';
+      if (n.startsWith('v')) return 'V';
+      if (n.startsWith('i')) return 'I';
+      if (n.startsWith('l')) return 'L';
+      if (n.startsWith('g')) return 'GND';
+      return null;
+    }
+
+    function imageToBinaryTemplate(img) {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      const src = cv.imread(c);
+      const gray = new cv.Mat();
+      const bin = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.threshold(gray, bin, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+      src.delete();
+      gray.delete();
+      return bin;
+    }
+
+    async function loadTemplateFiles(files) {
+      const out = {};
+      for (const file of files) {
+        const key = normalizeTemplateKey(file.name);
+        if (!key) continue;
+        const img = await fileToImage(file);
+        out[key] = { base: imageToBinaryTemplate(img), name: file.name };
+      }
+      return out;
+    }
+
+    function hasAnyTemplate() {
+      return Object.keys(loadedTemplates).length > 0;
+    }
+
+    function buildTemplateVariants(baseMat) {
+      const variants = [];
+      const rotations = [0, 90, 180, 270];
+      for (const deg of rotations) {
+        const rotated = new cv.Mat();
+        if (deg === 0) baseMat.copyTo(rotated);
+        else if (deg === 90) cv.rotate(baseMat, rotated, cv.ROTATE_90_CLOCKWISE);
+        else if (deg === 180) cv.rotate(baseMat, rotated, cv.ROTATE_180);
+        else cv.rotate(baseMat, rotated, cv.ROTATE_90_COUNTERCLOCKWISE);
+        rotated._rotation = deg;
+        variants.push(rotated);
+      }
+      return variants;
+    }
+
+    async function loadAnyTfModel(url) {
+      try { return await tf.loadGraphModel(url); }
+      catch (_) { return await tf.loadLayersModel(url); }
+    }
+
     imageInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -265,27 +238,56 @@
       }
     });
 
+    templateInput.addEventListener('change', async (e) => {
+      const files = [...(e.target.files || [])];
+      if (!files.length) return;
+      try {
+        loadedTemplates = await loadTemplateFiles(files);
+        setStatus(Object.keys(loadedTemplates).length ? '模板已載入：' + Object.keys(loadedTemplates).join(', ') : '未載入可用模板');
+      } catch (err) {
+        console.error(err);
+        setStatus('模板載入失敗');
+      }
+    });
+
+    loadModelBtn.addEventListener('click', async () => {
+      const url = (modelUrlInput.value || '').trim();
+      if (!url) return alert('請先輸入模型網址');
+      try {
+        setStatus('AI 模型載入中…');
+        aiModel = await loadAnyTfModel(url);
+        setStatus('AI 模型已載入');
+      } catch (err) {
+        console.error(err);
+        aiModel = null;
+        setStatus('AI 模型載入失敗');
+      }
+    });
+
     processBtn.addEventListener('click', async () => {
-      if (!window.cvReady) {
-        alert('OpenCV.js 尚未載入完成');
-        return;
-      }
-      if (!loadedImage) {
-        alert('請先上傳圖片');
-        return;
-      }
+      if (!window.cvReady) return alert('OpenCV.js 尚未載入完成');
+      if (!loadedImage) return alert('請先上傳圖片');
 
       try {
         setStatus('辨識中…');
-        const result = processCircuitImage();
+        const result = await processCircuitImage();
         lastResult = result;
         outputEl.value = JSON.stringify(result, null, 2);
         drawJsonPreview(result);
         const copied = await copyJsonToClipboard(result);
-        setStatus(copied ? '辨識完成，JSON 已自動複製' : '辨識完成，但自動複製失敗，可手動複製');
+        setStatus(copied ? '辨識完成，JSON 已自動複製' : '辨識完成，但自動複製失敗');
       } catch (err) {
         console.error(err);
         setStatus('辨識失敗：' + err.message);
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (lastResult) return exportJsonFile(lastResult, 'circuit.json');
+      try {
+        exportJsonFile(JSON.parse(outputEl.value || '{}'), 'circuit.json');
+      } catch (_) {
+        alert('目前沒有有效 JSON 可下載');
       }
     });
 
@@ -295,83 +297,37 @@
       outputEl.value = JSON.stringify(result, null, 2);
       drawDetectionOverlay(result);
       drawJsonPreview(result);
-      const copied = await copyJsonToClipboard(result);
-      setStatus(copied ? '已載入示範結果，JSON 已自動複製' : '已載入示範結果');
+      await copyJsonToClipboard(result);
+      setStatus('已載入示範結果，JSON 已自動複製');
     });
 
-    downloadBtn.addEventListener('click', () => {
-      if (lastResult) {
-        exportJsonFile(lastResult, 'circuit.json');
-        return;
-      }
-
-      const text = outputEl.value.trim();
-      if (!text) {
-        alert('目前沒有 JSON 可下載');
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(text);
-        exportJsonFile(parsed, 'circuit.json');
-      } catch (err) {
-        alert('JSON 格式有錯，無法下載');
-      }
-    });
-
-    function processCircuitImage() {
-      // === 1) 從 canvas 讀入影像 ===
+    async function processCircuitImage() {
       const src = cv.imread(srcCanvas);
       const gray = new cv.Mat();
       const binary = new cv.Mat();
       const blurred = new cv.Mat();
       const lines = new cv.Mat();
 
-      // === 2) 前處理 ===
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
       cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
       cv.threshold(blurred, binary, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
-
-      // === 3) 偵測線段（水平/垂直導線骨架） ===
-      // 這裡先抓粗略線段，後續可再做合併與過濾
       cv.HoughLinesP(binary, lines, 1, Math.PI / 180, 50, 30, 10);
 
-      // 顯示處理結果到右邊畫布
       const display = new cv.Mat();
       cv.cvtColor(binary, display, cv.COLOR_GRAY2RGBA);
       cv.imshow(dstCanvas, display);
 
-      // === 4) 分析線段 ===
       const detectedLines = extractAxisAlignedLines(lines);
-
-      // === 5) 元件辨識 ===
-      // 目前先用骨架：如果尚未提供模板，就回退到示範辨識
       let components = [];
-      if (hasAnyTemplate()) {
-        components = detectComponentsByTemplate(gray, display);
-      } else {
-        components = detectComponentsFromContours(binary);
-      }
+      if (hasAnyTemplate()) components = detectComponentsByTemplate(gray);
+      if (!components.length) components = await detectComponentsFromContours(binary, gray);
 
-      // === 6) 由元件 + 線段生成 JSON ===
       const result = buildCircuitJsonFromDetections(components, detectedLines);
-
-      // === 7) 疊圖標記 ===
+      if (ocrToggle.checked) await enrichComponentValuesWithOCR(result);
       drawDetectionOverlay(result);
 
-      // 釋放記憶體
-      src.delete();
-      gray.delete();
-      binary.delete();
-      blurred.delete();
-      lines.delete();
-      display.delete();
-
+      src.delete(); gray.delete(); binary.delete(); blurred.delete(); lines.delete(); display.delete();
       return result;
-    }
-
-    function hasAnyTemplate() {
-      return Object.values(TEMPLATE_CONFIG).some(v => !!v);
     }
 
     function extractAxisAlignedLines(linesMat) {
@@ -379,300 +335,174 @@
       for (let i = 0; i < linesMat.rows; i++) {
         const line = linesMat.data32S.slice(i * 4, i * 4 + 4);
         const [x1, y1, x2, y2] = line;
-
-        const dx = Math.abs(x2 - x1);
-        const dy = Math.abs(y2 - y1);
-
-        // 只保留接近水平/垂直的線
-        if (dy <= 8) {
-          result.push({
-            x1: snap(Math.min(x1, x2)),
-            y1: snap((y1 + y2) / 2),
-            x2: snap(Math.max(x1, x2)),
-            y2: snap((y1 + y2) / 2),
-            orientation: 'H'
-          });
-        } else if (dx <= 8) {
-          result.push({
-            x1: snap((x1 + x2) / 2),
-            y1: snap(Math.min(y1, y2)),
-            x2: snap((x1 + x2) / 2),
-            y2: snap(Math.max(y1, y2)),
-            orientation: 'V'
-          });
-        }
+        const dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
+        if (dy <= 8) result.push({ x1: snap(Math.min(x1, x2)), y1: snap((y1 + y2) / 2), x2: snap(Math.max(x1, x2)), y2: snap((y1 + y2) / 2), orientation: 'H' });
+        else if (dx <= 8) result.push({ x1: snap((x1 + x2) / 2), y1: snap(Math.min(y1, y2)), x2: snap((x1 + x2) / 2), y2: snap(Math.max(y1, y2)), orientation: 'V' });
       }
       return mergeNearbyLines(result);
     }
 
     function mergeNearbyLines(lines) {
-      // 簡單合併：同軸、距離近、重疊的線段合併
-      let merged = [...lines];
-      let changed = true;
-
+      let merged = [...lines], changed = true;
       while (changed) {
         changed = false;
-        outer:
-        for (let i = 0; i < merged.length; i++) {
+        outer: for (let i = 0; i < merged.length; i++) {
           for (let j = i + 1; j < merged.length; j++) {
-            const a = merged[i];
-            const b = merged[j];
+            const a = merged[i], b = merged[j];
             if (a.orientation !== b.orientation) continue;
-
-            if (a.orientation === 'H' && Math.abs(a.y1 - b.y1) <= GRID) {
-              const overlap = !(a.x2 < b.x1 - GRID || b.x2 < a.x1 - GRID);
-              if (overlap) {
-                merged[i] = {
-                  x1: Math.min(a.x1, b.x1),
-                  y1: snap((a.y1 + b.y1) / 2),
-                  x2: Math.max(a.x2, b.x2),
-                  y2: snap((a.y1 + b.y1) / 2),
-                  orientation: 'H'
-                };
-                merged.splice(j, 1);
-                changed = true;
-                break outer;
-              }
+            if (a.orientation === 'H' && Math.abs(a.y1 - b.y1) <= GRID && !(a.x2 < b.x1 - GRID || b.x2 < a.x1 - GRID)) {
+              merged[i] = { x1: Math.min(a.x1, b.x1), y1: snap((a.y1 + b.y1) / 2), x2: Math.max(a.x2, b.x2), y2: snap((a.y1 + b.y1) / 2), orientation: 'H' };
+              merged.splice(j, 1); changed = true; break outer;
             }
-
-            if (a.orientation === 'V' && Math.abs(a.x1 - b.x1) <= GRID) {
-              const overlap = !(a.y2 < b.y1 - GRID || b.y2 < a.y1 - GRID);
-              if (overlap) {
-                merged[i] = {
-                  x1: snap((a.x1 + b.x1) / 2),
-                  y1: Math.min(a.y1, b.y1),
-                  x2: snap((a.x1 + b.x1) / 2),
-                  y2: Math.max(a.y2, b.y2),
-                  orientation: 'V'
-                };
-                merged.splice(j, 1);
-                changed = true;
-                break outer;
-              }
+            if (a.orientation === 'V' && Math.abs(a.x1 - b.x1) <= GRID && !(a.y2 < b.y1 - GRID || b.y2 < a.y1 - GRID)) {
+              merged[i] = { x1: snap((a.x1 + b.x1) / 2), y1: Math.min(a.y1, b.y1), x2: snap((a.x1 + b.x1) / 2), y2: Math.max(a.y2, b.y2), orientation: 'V' };
+              merged.splice(j, 1); changed = true; break outer;
             }
           }
         }
       }
-
       return merged;
     }
 
-    function detectComponentsByTemplate(grayMat, displayMat) {
-      // 真正的模板辨識入口
-      // 你之後把模板圖載入成 Mat 後，可在此用 cv.matchTemplate()
-      // 如果模板已設定，目前先回退到輪廓候選辨識，避免輸出假資料
-      return detectComponentsFromContours(grayMat);
+    function detectComponentsByTemplate(grayMat) {
+      const detections = [];
+      const counts = { R:0, C:0, V:0, I:0, L:0, GND:0 };
+      const thresholds = { R:0.45, C:0.45, V:0.50, I:0.50, L:0.45, GND:0.42 };
+
+      for (const [type, tpl] of Object.entries(loadedTemplates)) {
+        const variants = buildTemplateVariants(tpl.base);
+        for (const variant of variants) {
+          if (grayMat.cols < variant.cols || grayMat.rows < variant.rows) { variant.delete(); continue; }
+          const result = new cv.Mat(grayMat.rows - variant.rows + 1, grayMat.cols - variant.cols + 1, cv.CV_32FC1);
+          cv.matchTemplate(grayMat, variant, result, cv.TM_CCOEFF_NORMED);
+
+          for (;;) {
+            const mm = cv.minMaxLoc(result);
+            if (mm.maxVal < (thresholds[type] || 0.45)) break;
+            const cx = snap(mm.maxLoc.x + variant.cols / 2);
+            const cy = snap(mm.maxLoc.y + variant.rows / 2);
+            const duplicate = detections.some(d => d.type === type && Math.abs(d.x - cx) <= GRID && Math.abs(d.y - cy) <= GRID);
+            if (!duplicate) {
+              counts[type] += 1;
+              detections.push({ type, name: type === 'GND' ? 'GND' : type + counts[type], value: '', x: cx, y: cy, rotation: variant._rotation || 0 });
+            }
+            const sx = Math.max(0, mm.maxLoc.x - 6), sy = Math.max(0, mm.maxLoc.y - 6);
+            const ex = Math.min(result.cols, mm.maxLoc.x + variant.cols + 6), ey = Math.min(result.rows, mm.maxLoc.y + variant.rows + 6);
+            const roi = result.roi(new cv.Rect(sx, sy, ex - sx, ey - sy));
+            roi.setTo(new cv.Scalar(-1));
+            roi.delete();
+          }
+          result.delete();
+          variant.delete();
+        }
+      }
+      return detections;
     }
 
-    function detectComponentsFromContours(binaryLikeMat) {
-      const srcMat = binaryLikeMat.clone ? binaryLikeMat.clone() : binaryLikeMat;
+    async function detectComponentsFromContours(binaryMat, grayMat) {
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       const results = [];
       const usedCenters = [];
-
-      cv.findContours(srcMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      let rCount = 0;
-      let cCount = 0;
-      let vCount = 0;
-      let lCount = 0;
-      let gCount = 0;
+      cv.findContours(binaryMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      const counts = { R:0, C:0, V:0, I:0, L:0, GND:0 };
 
       for (let i = 0; i < contours.size(); i++) {
         const cnt = contours.get(i);
         const rect = cv.boundingRect(cnt);
         const area = cv.contourArea(cnt);
-        const w = rect.width;
-        const h = rect.height;
+        const w = rect.width, h = rect.height;
+        if (w < 12 || h < 12) { cnt.delete(); continue; }
+        if (w > srcCanvas.width * 0.6 || h > srcCanvas.height * 0.6) { cnt.delete(); continue; }
+        if ((w > 80 && h < 12) || (h > 80 && w < 12)) { cnt.delete(); continue; }
 
-        // 過濾太小 / 太大
-        if (w < 12 || h < 12) {
-          cnt.delete();
-          continue;
-        }
-        if (w > srcCanvas.width * 0.6 || h > srcCanvas.height * 0.6) {
-          cnt.delete();
-          continue;
-        }
+        const cx = snap(rect.x + w / 2), cy = snap(rect.y + h / 2);
+        const fillRatio = area / (w * h), aspect = w / h;
+        if (usedCenters.some(p => Math.abs(p.x - cx) <= GRID && Math.abs(p.y - cy) <= GRID)) { cnt.delete(); continue; }
 
-        // 細長線段通常是導線，不當成元件
-        if ((w > 80 && h < 12) || (h > 80 && w < 12)) {
-          cnt.delete();
-          continue;
-        }
+        let type = null, rotation = 0;
+        if (aspect > 0.7 && aspect < 1.3 && fillRatio > 0.35 && fillRatio < 0.9) { type = 'V'; rotation = 90; }
+        else if (w >= 28 && h <= 28 && aspect >= 1.4) { type = 'C'; rotation = 0; }
+        else if (h >= 24 && h <= 90 && w >= 12 && w <= 40 && fillRatio < 0.42) { type = 'L'; rotation = 90; }
+        else if (h >= 28 && w <= 40) { type = 'R'; rotation = 90; }
+        else if (w >= 20 && w <= 50 && h >= 12 && h <= 26 && fillRatio < 0.45) { type = 'GND'; }
 
-        const cx = snap(rect.x + w / 2);
-        const cy = snap(rect.y + h / 2);
-        const fillRatio = area / (w * h);
-        const aspect = w / h;
-
-        // 避免同中心重複加入
-        const duplicate = usedCenters.some(p => Math.abs(p.x - cx) <= GRID && Math.abs(p.y - cy) <= GRID);
-        if (duplicate) {
-          cnt.delete();
-          continue;
+        if (type && aiToggle.checked && aiModel) {
+          const patch = cropRectToCanvas(rect.x, rect.y, rect.width, rect.height, 10);
+          const aiType = await classifyPatchWithAI(patch);
+          if (aiType) type = aiType;
         }
 
-        let item = null;
-
-        // 粗略分類規則（仍是啟發式，但比固定示範元件安全）
-        // 近似圓形：常見於電壓源/電流源符號
-        if (aspect > 0.7 && aspect < 1.3 && fillRatio > 0.35 && fillRatio < 0.9) {
-          vCount += 1;
-          item = {
-            type: 'V',
-            name: 'V' + vCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // 橫向兩極板：像電容
-        else if (w >= 28 && h <= 28 && aspect >= 1.4) {
-          cCount += 1;
-          item = {
-            type: 'C',
-            name: 'C' + cCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 0
-          };
-        }
-        // 中等高度且較窄，但填充率偏低：當電感候選
-        else if (h >= 24 && h <= 90 && w >= 12 && w <= 40 && fillRatio < 0.42) {
-          lCount += 1;
-          item = {
-            type: 'L',
-            name: 'L' + lCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // 直向元件：先當電阻候選
-        else if (h >= 28 && w <= 40) {
-          rCount += 1;
-          item = {
-            type: 'R',
-            name: 'R' + rCount,
-            value: '',
-            x: cx,
-            y: cy,
-            rotation: 90
-          };
-        }
-        // 小型多橫線：可能是 GND 附近，保守只抓較矮較寬符號
-        else if (w >= 20 && w <= 50 && h >= 12 && h <= 26 && fillRatio < 0.45) {
-          gCount += 1;
-          item = {
-            type: 'GND',
-            name: 'GND',
-            x: cx,
-            y: cy + 20,
-            rotation: 0
-          };
-        }
-
-        if (item) {
+        if (type) {
+          counts[type] += 1;
           usedCenters.push({ x: cx, y: cy });
-          results.push(item);
+          results.push({ type, name: type === 'GND' ? 'GND' : type + counts[type], value: '', x: cx, y: type === 'GND' ? cy + 20 : cy, rotation });
         }
-
         cnt.delete();
       }
 
-      contours.delete();
-      hierarchy.delete();
-      if (srcMat !== binaryLikeMat) srcMat.delete();
-
+      contours.delete(); hierarchy.delete();
       return results;
     }
 
-    function makeElement({ type, name, value, x, y, rotation = 0 }) {
-      x = snap(x);
-      y = snap(y);
+    function cropRectToCanvas(x, y, w, h, pad = 0) {
+      const left = Math.max(0, x - pad), top = Math.max(0, y - pad);
+      const width = Math.min(srcCanvas.width - left, w + pad * 2);
+      const height = Math.min(srcCanvas.height - top, h + pad * 2);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, width); c.height = Math.max(1, height);
+      c.getContext('2d').drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
+      return c;
+    }
 
-      if (type === 'GND') {
-        return {
-          id: uid('gnd'),
-          type: 'GND',
-          name: 'GND',
-          p: { x, y: snap(y - 20) },
-          x,
-          y
-        };
-      }
+    async function classifyPatchWithAI(canvasEl) {
+      if (!aiModel || !window.tf) return null;
+      const labels = ['R', 'C', 'V', 'I', 'L', 'GND'];
+      const shape = aiModel.inputs && aiModel.inputs[0] && aiModel.inputs[0].shape ? aiModel.inputs[0].shape : [null, 64, 64, 3];
+      const h = shape[1] || 64, w = shape[2] || 64;
+      const pred = tf.tidy(() => {
+        let t = tf.browser.fromPixels(canvasEl).toFloat();
+        t = tf.image.resizeBilinear(t, [h, w]).div(255).expandDims(0);
+        const out = aiModel.predict ? aiModel.predict(t) : aiModel.execute(t);
+        return out.clone();
+      });
+      const data = await pred.data();
+      pred.dispose();
+      let maxIdx = 0;
+      for (let i = 1; i < data.length; i++) if (data[i] > data[maxIdx]) maxIdx = i;
+      return labels[maxIdx] || null;
+    }
 
-      const el = {
-        id: uid(type.toLowerCase()),
-        type,
-        name,
-        value,
-        rotation,
-        x,
-        y
-      };
-
+    function makeElement(def) {
+      const type = def.type, x = snap(def.x), y = snap(def.y), rotation = def.rotation || 0;
+      if (type === 'GND') return { id: uid('gnd'), type: 'GND', name: 'GND', p: { x, y: snap(y - 20) }, x, y };
+      const el = { id: uid(type.toLowerCase()), type, name: def.name, value: def.value || '', rotation, x, y };
       if (rotation === 0 || rotation === 180) {
-        el.a = { x: snap(x - 80), y };
-        el.b = { x: snap(x + 80), y };
+        el.a = { x: snap(x - 80), y }; el.b = { x: snap(x + 80), y };
       } else {
-        el.a = { x, y: snap(y + 80) };
-        el.b = { x, y: snap(y - 80) };
+        el.a = { x, y: snap(y + 80) }; el.b = { x, y: snap(y - 80) };
       }
-
       return el;
     }
 
     function makeWire(points) {
-      return {
-        id: uid('w'),
-        points: points.map(p => ({ x: snap(p.x), y: snap(p.y) }))
-      };
+      return { id: uid('w'), points: points.map(p => ({ x: snap(p.x), y: snap(p.y) })) };
     }
 
     function buildCircuitJsonFromDetections(componentDefs, detectedLines) {
       const elements = componentDefs.map(makeElement);
-
-      // 先嘗試從偵測線段轉 wire，若太少就回退到元件推線
-      let wires = detectedLines
-        .filter(line => Math.hypot(line.x2 - line.x1, line.y2 - line.y1) >= GRID)
-        .map(line => makeWire([
-          { x: line.x1, y: line.y1 },
-          { x: line.x2, y: line.y2 }
-        ]));
-
+      let wires = detectedLines.filter(line => Math.hypot(line.x2 - line.x1, line.y2 - line.y1) >= GRID).map(line => makeWire([{ x: line.x1, y: line.y1 }, { x: line.x2, y: line.y2 }]));
       if (wires.length < 3 && elements.length >= 2) {
         const inferred = inferWiresFromElements(elements);
         if (inferred.length) wires = inferred;
       }
-
-      return {
-        version: 1,
-        grid: GRID,
-        freqHz: FREQ_HZ,
-        elements,
-        wires,
-        junctions: []
-      };
+      return { version: 1, grid: GRID, freqHz: FREQ_HZ, elements, wires, junctions: [] };
     }
 
     function inferWiresFromElements(elements) {
-      const findByType = type => elements.filter(e => e.type === type);
-
-      const i = findByType('I')[0];
-      const r = findByType('R')[0];
-      const l = findByType('L')[0];
-      const c = findByType('C')[0];
-      const v = findByType('V')[0];
-      const g = findByType('GND')[0];
-
+      const pick = t => elements.filter(e => e.type === t);
+      const i = pick('I')[0], r = pick('R')[0], l = pick('L')[0], c = pick('C')[0], v = pick('V')[0], g = pick('GND')[0];
       const wires = [];
-
       if (i && r) wires.push(makeWire([i.b, { x: r.a.x, y: i.b.y }]));
       if (r && c) wires.push(makeWire([{ x: r.a.x + 20, y: r.a.y }, c.a]));
       if (l && c) wires.push(makeWire([{ x: l.a.x, y: c.a.y }, c.a]));
@@ -682,159 +512,33 @@
       if (r && v) wires.push(makeWire([r.b, v.a]));
       if (l && g) wires.push(makeWire([l.b, g.p]));
       if (r && g) wires.push(makeWire([r.b, g.p]));
-
       return wires;
     }
 
-    function drawJsonPreview(result) {
-      clearCanvas(previewCtx, previewCanvas);
-      previewCtx.strokeStyle = '#e5e7eb';
-      previewCtx.lineWidth = 1;
-      for (let x = 0; x <= previewCanvas.width; x += GRID) {
-        previewCtx.beginPath();
-        previewCtx.moveTo(x, 0);
-        previewCtx.lineTo(x, previewCanvas.height);
-        previewCtx.stroke();
-      }
-      for (let y = 0; y <= previewCanvas.height; y += GRID) {
-        previewCtx.beginPath();
-        previewCtx.moveTo(0, y);
-        previewCtx.lineTo(previewCanvas.width, y);
-        previewCtx.stroke();
-      }
-
-      previewCtx.strokeStyle = '#2563eb';
-      previewCtx.lineWidth = 3;
-      for (const wire of result.wires || []) {
-        if (!wire.points || wire.points.length < 2) continue;
-        previewCtx.beginPath();
-        previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) {
-          previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        }
-        previewCtx.stroke();
-      }
-
-      for (const el of result.elements || []) {
-        drawSymbol(previewCtx, el);
-      }
-    }
-
-    function drawSymbol(ctx, el) {
-      ctx.save();
-      ctx.translate(el.x, el.y);
-      ctx.strokeStyle = '#111827';
-      ctx.fillStyle = '#111827';
-      ctx.lineWidth = 3;
-      ctx.font = '14px Arial';
-
-      if (el.type === 'R') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -25);
-        let y = -25;
-        const step = 8;
-        const amp = 10;
-        for (let i = 0; i < 6; i++) {
-          ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step);
-          y += step;
-        }
-        ctx.lineTo(0, 25); ctx.lineTo(0, 40);
-        ctx.stroke();
-      } else if (el.type === 'L') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -22);
-        ctx.stroke();
-        for (let i = 0; i < 4; i++) {
-          ctx.beginPath();
-          ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true);
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.moveTo(0, 22); ctx.lineTo(0, 40);
-        ctx.stroke();
-      } else if (el.type === 'C') {
-        ctx.beginPath();
-        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
-        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
-        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
-        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
-        ctx.stroke();
-      } else if (el.type === 'V' || el.type === 'I') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -20);
-        ctx.moveTo(0, 20); ctx.lineTo(0, 40);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, 0, 20, 0, Math.PI * 2);
-        ctx.stroke();
-        if (el.type === 'V') {
-          ctx.fillText('+', 10, 4);
-          ctx.fillText('-', -16, 4);
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(0, 8);
-          ctx.lineTo(0, -8);
-          ctx.lineTo(-8, 0);
-          ctx.moveTo(0, -8);
-          ctx.lineTo(8, 0);
-          ctx.stroke();
-        }
-      } else if (el.type === 'GND') {
-        ctx.beginPath();
-        ctx.moveTo(0, -20); ctx.lineTo(0, 0);
-        ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
-        ctx.moveTo(-10, 8); ctx.lineTo(10, 8);
-        ctx.moveTo(-5, 16); ctx.lineTo(5, 16);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(-16, -16, 32, 32);
-      }
-
-      ctx.fillText(el.name || el.type, 14, -14);
-      ctx.restore();
-    }
-
-    function drawDetectionOverlay(result) {
-      if (loadedImage) {
-        fitAndDrawImage(loadedImage, dstCtx, dstCanvas);
-      } else {
-        clearCanvas(dstCtx, dstCanvas);
-      }
-
-      // 畫 wire
-      dstCtx.strokeStyle = '#2563eb';
-      dstCtx.lineWidth = 2;
-      for (const wire of result.wires) {
-        if (!wire.points || wire.points.length < 2) continue;
-        dstCtx.beginPath();
-        dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) {
-          dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        }
-        dstCtx.stroke();
-      }
-
-      // 畫元件
+    async function enrichComponentValuesWithOCR(result) {
+      if (!window.Tesseract || !result || !result.elements) return;
       for (const el of result.elements) {
-        dstCtx.strokeStyle = '#dc2626';
-        dstCtx.lineWidth = 2;
-        dstCtx.strokeRect(el.x - 24, el.y - 24, 48, 48);
-
-        dstCtx.fillStyle = '#dc2626';
-        dstCtx.font = '14px Arial';
-        dstCtx.fillText(`${el.type}:${el.name}`, el.x + 8, el.y - 8);
-
-        const pts = [];
-        if (el.a) pts.push(el.a);
-        if (el.b) pts.push(el.b);
-        if (el.p) pts.push(el.p);
-
-        for (const p of pts) {
-          dstCtx.beginPath();
-          dstCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-          dstCtx.fill();
+        if (el.type === 'GND') continue;
+        try {
+          const crop = cropRegionNearElement(el);
+          const ocr = await Tesseract.recognize(crop, 'eng', { logger: () => {} });
+          const text = cleanOcrText((ocr && ocr.data && ocr.data.text) || '');
+          if (text) el.value = text;
+        } catch (err) {
+          console.error('ocr failed', err);
         }
       }
+    }
+
+    function cropRegionNearElement(el) {
+      const pad = 70;
+      const left = Math.max(0, el.x - pad), top = Math.max(0, el.y - pad);
+      const width = Math.min(srcCanvas.width - left, pad * 2), height = Math.min(srcCanvas.height - top, pad * 2);
+      return cropRectToCanvas(left, top, width, height, 0);
+    }
+
+    function cleanOcrText(text) {
+      return (text || '').replace(/\s+/g, ' ').replace(/[^0-9a-zA-Z+\-\.jJΩ∠ ]/g, '').trim().slice(0, 24);
     }
 
     async function copyJsonToClipboard(data) {
@@ -844,14 +548,9 @@
           await navigator.clipboard.writeText(jsonText);
           return true;
         }
-
         const ta = document.createElement('textarea');
-        ta.value = jsonText;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
+        ta.value = jsonText; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.focus(); ta.select();
         const ok = document.execCommand('copy');
         document.body.removeChild(ta);
         return !!ok;
@@ -862,16 +561,73 @@
     }
 
     function exportJsonFile(data, filename = 'circuit.json') {
-      const jsonText = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonText], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    function drawDetectionOverlay(result) {
+      if (loadedImage) fitAndDrawImage(loadedImage, dstCtx, dstCanvas); else clearCanvas(dstCtx, dstCanvas);
+      dstCtx.strokeStyle = '#2563eb'; dstCtx.lineWidth = 2;
+      for (const wire of (result.wires || [])) {
+        if (!wire.points || wire.points.length < 2) continue;
+        dstCtx.beginPath(); dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
+        for (let i = 1; i < wire.points.length; i++) dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
+        dstCtx.stroke();
+      }
+      for (const el of (result.elements || [])) {
+        dstCtx.strokeStyle = '#dc2626'; dstCtx.lineWidth = 2;
+        dstCtx.strokeRect(el.x - 24, el.y - 24, 48, 48);
+        dstCtx.fillStyle = '#dc2626'; dstCtx.font = '14px Arial';
+        dstCtx.fillText((el.type || '?') + ':' + (el.name || ''), el.x + 8, el.y - 8);
+      }
+    }
+
+    function drawJsonPreview(result) {
+      clearCanvas(previewCtx, previewCanvas);
+      previewCtx.strokeStyle = '#e5e7eb'; previewCtx.lineWidth = 1;
+      for (let x = 0; x <= previewCanvas.width; x += GRID) { previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke(); }
+      for (let y = 0; y <= previewCanvas.height; y += GRID) { previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke(); }
+      previewCtx.strokeStyle = '#2563eb'; previewCtx.lineWidth = 3;
+      for (const wire of (result.wires || [])) {
+        if (!wire.points || wire.points.length < 2) continue;
+        previewCtx.beginPath(); previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
+        for (let i = 1; i < wire.points.length; i++) previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
+        previewCtx.stroke();
+      }
+      for (const el of (result.elements || [])) drawSymbol(previewCtx, el);
+    }
+
+    function drawSymbol(ctx, el) {
+      ctx.save(); ctx.translate(el.x, el.y); ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
+      ctx.strokeStyle = '#111827'; ctx.fillStyle = '#111827'; ctx.lineWidth = 3; ctx.font = '14px Arial';
+      if (el.type === 'R') {
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -25);
+        let y = -25; const step = 8, amp = 10;
+        for (let i = 0; i < 6; i++) { ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step); y += step; }
+        ctx.lineTo(0, 25); ctx.lineTo(0, 40); ctx.stroke();
+      } else if (el.type === 'L') {
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -22); ctx.stroke();
+        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true); ctx.stroke(); }
+        ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 40); ctx.stroke();
+      } else if (el.type === 'C') {
+        ctx.beginPath(); ctx.moveTo(-40, 0); ctx.lineTo(-12, 0); ctx.moveTo(-8, -18); ctx.lineTo(-8, 18); ctx.moveTo(8, -18); ctx.lineTo(8, 18); ctx.moveTo(12, 0); ctx.lineTo(40, 0); ctx.stroke();
+      } else if (el.type === 'V' || el.type === 'I') {
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -20); ctx.moveTo(0, 20); ctx.lineTo(0, 40); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.stroke();
+        if (el.type === 'V') { ctx.fillText('+', 10, 4); ctx.fillText('-', -16, 4); }
+        else { ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, -8); ctx.lineTo(-8, 0); ctx.moveTo(0, -8); ctx.lineTo(8, 0); ctx.stroke(); }
+      } else if (el.type === 'GND') {
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 0); ctx.moveTo(-16, 0); ctx.lineTo(16, 0); ctx.moveTo(-10, 8); ctx.lineTo(10, 8); ctx.moveTo(-5, 16); ctx.lineTo(5, 16); ctx.stroke();
+      } else {
+        ctx.strokeRect(-16, -16, 32, 32);
+      }
+      ctx.rotate(-((el.rotation || 0) * Math.PI) / 180);
+      ctx.fillText(el.name || el.type, 14, -14);
+      ctx.restore();
     }
 
     function buildDemoCircuit() {
@@ -880,83 +636,25 @@
         grid: 20,
         freqHz: 60,
         elements: [
-          {
-            id: uid('i'),
-            type: 'I',
-            name: 'I1',
-            value: '12',
-            rotation: 270,
-            x: 300,
-            y: 280,
-            a: { x: 300, y: 360 },
-            b: { x: 300, y: 200 }
-          },
-          {
-            id: uid('r'),
-            type: 'R',
-            name: 'R1',
-            value: '4',
-            rotation: 90,
-            x: 460,
-            y: 280,
-            a: { x: 460, y: 360 },
-            b: { x: 460, y: 200 }
-          },
-          {
-            id: uid('v'),
-            type: 'V',
-            name: 'V1',
-            value: '3.4641 + 2j',
-            rotation: 90,
-            x: 720,
-            y: 280,
-            a: { x: 720, y: 360 },
-            b: { x: 720, y: 200 }
-          },
-          {
-            id: uid('c'),
-            type: 'C',
-            name: 'C1',
-            value: '-2j',
-            rotation: 0,
-            x: 600,
-            y: 200,
-            a: { x: 520, y: 200 },
-            b: { x: 680, y: 200 }
-          },
-          {
-            id: uid('gnd'),
-            type: 'GND',
-            name: 'GND',
-            p: { x: 460, y: 360 },
-            x: 460,
-            y: 380
-          }
+          { id: uid('v'), type: 'V', name: 'V1', value: '12∠60', rotation: 90, x: 180, y: 280, a: { x: 180, y: 360 }, b: { x: 180, y: 200 } },
+          { id: uid('r'), type: 'R', name: 'R1', value: '4', rotation: 0, x: 340, y: 200, a: { x: 260, y: 200 }, b: { x: 420, y: 200 } },
+          { id: uid('l'), type: 'L', name: 'L1', value: 'j2', rotation: 90, x: 460, y: 280, a: { x: 460, y: 360 }, b: { x: 460, y: 200 } },
+          { id: uid('c'), type: 'C', name: 'C1', value: '-j2', rotation: 0, x: 620, y: 200, a: { x: 540, y: 200 }, b: { x: 700, y: 200 } },
+          { id: uid('r'), type: 'R', name: 'R2', value: '2', rotation: 90, x: 780, y: 280, a: { x: 780, y: 360 }, b: { x: 780, y: 200 } },
+          { id: uid('gnd'), type: 'GND', name: 'GND', p: { x: 460, y: 360 }, x: 460, y: 380 }
         ],
         wires: [
-          { id: uid('w'), points: [{ x: 300, y: 200 }, { x: 460, y: 200 }] },
-          { id: uid('w'), points: [{ x: 480, y: 200 }, { x: 520, y: 200 }] },
-          { id: uid('w'), points: [{ x: 680, y: 200 }, { x: 720, y: 200 }] },
-          { id: uid('w'), points: [{ x: 300, y: 360 }, { x: 460, y: 360 }] },
-          { id: uid('w'), points: [{ x: 460, y: 360 }, { x: 720, y: 360 }] }
+          { id: uid('w'), points: [{ x: 180, y: 200 }, { x: 260, y: 200 }] },
+          { id: uid('w'), points: [{ x: 420, y: 200 }, { x: 540, y: 200 }] },
+          { id: uid('w'), points: [{ x: 700, y: 200 }, { x: 780, y: 200 }] },
+          { id: uid('w'), points: [{ x: 180, y: 360 }, { x: 780, y: 360 }] }
         ],
         junctions: []
       };
     }
 
-    // 預設放一個空 JSON，避免右側空白
-    outputEl.value = JSON.stringify({
-      version: 1,
-      grid: 20,
-      freqHz: 60,
-      elements: [],
-      wires: [],
-      junctions: []
-    }, null, 2);
-
-    clearCanvas(srcCtx, srcCanvas);
-    clearCanvas(dstCtx, dstCanvas);
-    clearCanvas(previewCtx, previewCanvas);
+    outputEl.value = JSON.stringify({ version: 1, grid: 20, freqHz: 60, elements: [], wires: [], junctions: [] }, null, 2);
+    clearCanvas(srcCtx, srcCanvas); clearCanvas(dstCtx, dstCanvas); clearCanvas(previewCtx, previewCanvas);
   </script>
 </body>
 </html>
