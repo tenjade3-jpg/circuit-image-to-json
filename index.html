@@ -300,33 +300,44 @@
 
     async function buildSpecializedJson(anchors) {
       const xLeft = snap(anchors.source.x);
-      
+      const xRight = snap(Math.max(anchors.resistor.x, anchors.inductor.x, anchors.gnd.x));
 
       const vY = snap(anchors.source.y);
       let rY = snap(anchors.resistor.y);
-      let     a: { x: xLeft, y: snap(vY - 80) },
+      let lY = snap(anchors.inductor.y);
+      if (lY <= rY + 100) lY = snap(rY + 180);
+      const gY = snap(Math.max(anchors.gnd.y + 20, lY + 100));
+
+      const v = {
+        id: uid('v'), type: 'V', name: 'V1', x: xLeft, y: vY,
+        a: { x: xLeft, y: snap(vY - 80) },
         b: { x: xLeft, y: snap(vY + 80) },
         rotation: 90,
         value: ''
-      };   id: uconst r = {
+      };
+
+      const r = {
         id: uid('r'), type: 'R', name: 'R1', x: xRight, y: rY,
         a: { x: xRight, y: snap(rY - 80) },
         b: { x: xRight, y: snap(rY + 80) },
         rotation: 90,
         value: ''
-      };   a: { const l = {
+      };
+
+      const l = {
         id: uid('l'), type: 'L', name: 'L1', x: xRight, y: lY,
         a: { x: xRight, y: snap(lY - 80) },
         b: { x: xRight, y: snap(lY + 80) },
         rotation: 90,
         value: ''
-      };ires = [
-        {
-          id: uid('w'),
-          points: [
-            { x: r.a.x, y: r.a.y },
-            { x: v.a.x, y: r.a.y },
-          const wires = [
+      };
+
+      const g = {
+        id: uid('g'), type: 'GND', name: 'GND', x: xRight, y: gY,
+        p: { x: xRight, y: snap(gY - 20) }
+      };
+
+      const wires = [
         {
           id: uid('w'),
           points: [
@@ -348,7 +359,18 @@
             { x: l.b.x, y: l.b.y },
             { x: v.b.x, y: l.b.y },
             { x: v.b.x, y: v.b.y }
-          ]    return {
+          ]
+        },
+        {
+          id: uid('w'),
+          points: [
+            { x: l.b.x, y: l.b.y },
+            { x: g.p.x, y: g.p.y }
+          ]
+        }
+      ];
+
+      return {
         version: 2,
         grid: GRID,
         junctions: [],
@@ -374,7 +396,37 @@
       const jsonText = JSON.stringify(data, null, 2);
       try {
         if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(jserlay(result) {
+          await navigator.clipboard.writeText(jsonText);
+          return true;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = jsonText;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return !!ok;
+      } catch {
+        return false;
+      }
+    }
+
+    function exportJsonFile(data, filename = 'circuit.json') {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function drawDetectionOverlay(result) {
       if (loadedImage) fitAndDrawImage(loadedImage, dstCtx, dstCanvas);
       else clearCanvas(dstCtx, dstCanvas);
       dstCtx.strokeStyle = '#2563eb';
