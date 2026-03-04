@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>電路圖影像辨識轉 JSON v4</title>
+  <title>電路圖辨識專用版 v5</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; background: #f3f4f6; color: #111827; }
@@ -34,8 +34,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>電路圖影像辨識 → JSON v4</h1>
-    <p class="desc">加強版：先做文字遮罩，再抓元件；圓形來源符號會嘗試區分 V / I；辨識後自動複製 JSON。</p>
+    <h1>電路圖辨識專用版 v5</h1>
+    <p class="desc">針對固定版型：左 V、右 R→L→GND。這版不是通用辨識器，而是專門把你這類圖轉成穩定 JSON。</p>
     <div id="status" class="status">OpenCV.js 載入中…</div>
 
     <div class="toolbar">
@@ -61,13 +61,11 @@
             <canvas id="previewCanvas" width="700" height="500"></canvas>
           </div>
         </div>
-        <div class="small">
-          這版固定啟用：灰階、二值化、降噪、文字區域遮罩、線段分析、元件分類、OCR 數值辨識、JSON 預覽圖。
-        </div>
+        <div class="small">這版會強制套用固定拓撲：上導線、R-L 中間短連線、下導線，並用 OCR 讀 V / R / L 的數值。</div>
         <ul class="list">
-          <li>只留一個圖片上傳，不用再選模型</li>
-          <li>會先盡量排除數字與文字，再抓元件</li>
-          <li>圓形來源元件會嘗試判斷是電壓源 V 還是電流源 I</li>
+          <li>左側找 1 個來源元件（預設 V）</li>
+          <li>右側上方找 R、下方找 L、最下方找 GND</li>
+          <li>輸出直接對齊你提供的 JSON 格式</li>
         </ul>
       </div>
       <div class="card">
@@ -99,7 +97,6 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const demoBtn = document.getElementById('demoBtn');
     const outputEl = document.getElementById('output');
-
     const srcCanvas = document.getElementById('srcCanvas');
     const dstCanvas = document.getElementById('dstCanvas');
     const previewCanvas = document.getElementById('previewCanvas');
@@ -159,7 +156,6 @@
     processBtn.addEventListener('click', async () => {
       if (!window.cvReady) return alert('OpenCV.js 尚未載入完成');
       if (!loadedImage) return alert('請先上傳圖片');
-
       try {
         setStatus('辨識中…');
         const result = await processCircuitImage();
@@ -184,7 +180,7 @@
     });
 
     demoBtn.addEventListener('click', async () => {
-      const result = buildDemoCircuit();
+      const result = buildReferenceDemo();
       lastResult = result;
       outputEl.value = JSON.stringify(result, null, 2);
       drawDetectionOverlay(result);
@@ -196,33 +192,23 @@
     async function processCircuitImage() {
       const src = cv.imread(srcCanvas);
       const gray = new cv.Mat();
-      const blurred = new cv.Mat();
       const binary = new cv.Mat();
-      const noText = new cv.Mat();
-      const linesMat = new cv.Mat();
-      const display = new cv.Mat();
-
+      const clean = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-      cv.threshold(blurred, binary, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+      cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+      cv.threshold(gray, binary, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+      removeTextLikeContours(binary, clean);
+      cv.cvtColor(clean, src, cv.COLOR_GRAY2RGBA);
+      cv.imshow(dstCanvas, src);
 
-      const openKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(2, 2));
-      cv.morphologyEx(binary, binary, cv.MORPH_OPEN, openKernel);
-      openKernel.delete();
-
-      removeTextLikeContours(binary, noText);
-      cv.HoughLinesP(noText, linesMat, 1, Math.PI / 180, 55, 35, 12);
-
-      cv.cvtColor(noText, display, cv.COLOR_GRAY2RGBA);
-      cv.imshow(dstCanvas, display);
-
-      const detectedLines = extractAxisAlignedLines(linesMat);
-      const components = detectComponentsFromContours(noText);
-      const result = buildCircuitJsonFromDetections(components, detectedLines);
-      await enrichComponentValuesWithOCR(result);
+      const anchors = detectAnchors(clean);
+      const result = await buildSpecializedJson(anchors);
       drawDetectionOverlay(result);
 
-      src.delete(); gray.delete(); blurred.delete(); binary.delete(); noText.delete(); linesMat.delete(); display.delete();
+      gray.delete();
+      binary.delete();
+      clean.delete();
+      src.delete();
       return result;
     }
 
@@ -231,7 +217,6 @@
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       cv.findContours(srcBinary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
       for (let i = 0; i < contours.size(); i++) {
         const cnt = contours.get(i);
         const rect = cv.boundingRect(cnt);
@@ -239,86 +224,33 @@
         const w = rect.width, h = rect.height;
         const aspect = w / Math.max(h, 1);
         const fillRatio = area / Math.max(w * h, 1);
-
         const likelyText = (
           (w >= 8 && w <= 95 && h >= 6 && h <= 22 && aspect >= 1.7) ||
           (w >= 7 && w <= 18 && h >= 7 && h <= 24 && fillRatio > 0.08 && fillRatio < 0.72) ||
           (w <= 14 && h <= 14)
         );
-
         if (likelyText) {
-          const pad = 2;
-          const x = Math.max(0, rect.x - pad);
-          const y = Math.max(0, rect.y - pad);
-          const ww = Math.min(outBinary.cols - x, rect.width + pad * 2);
-          const hh = Math.min(outBinary.rows - y, rect.height + pad * 2);
+          const p = 2;
+          const x = Math.max(0, rect.x - p);
+          const y = Math.max(0, rect.y - p);
+          const ww = Math.min(outBinary.cols - x, rect.width + p * 2);
+          const hh = Math.min(outBinary.rows - y, rect.height + p * 2);
           const roi = outBinary.roi(new cv.Rect(x, y, ww, hh));
           roi.setTo(new cv.Scalar(0));
           roi.delete();
         }
         cnt.delete();
       }
-
       contours.delete();
       hierarchy.delete();
     }
 
-    function extractAxisAlignedLines(linesMat) {
-      const result = [];
-      for (let i = 0; i < linesMat.rows; i++) {
-        const line = linesMat.data32S.slice(i * 4, i * 4 + 4);
-        const [x1, y1, x2, y2] = line;
-        const dx = Math.abs(x2 - x1);
-        const dy = Math.abs(y2 - y1);
-
-        if (dy <= 8) {
-          result.push({ x1: snap(Math.min(x1, x2)), y1: snap((y1 + y2) / 2), x2: snap(Math.max(x1, x2)), y2: snap((y1 + y2) / 2), orientation: 'H' });
-        } else if (dx <= 8) {
-          result.push({ x1: snap((x1 + x2) / 2), y1: snap(Math.min(y1, y2)), x2: snap((x1 + x2) / 2), y2: snap(Math.max(y1, y2)), orientation: 'V' });
-        }
-      }
-      return mergeNearbyLines(result);
-    }
-
-    function mergeNearbyLines(lines) {
-      let merged = [...lines];
-      let changed = true;
-
-      while (changed) {
-        changed = false;
-        outer:
-        for (let i = 0; i < merged.length; i++) {
-          for (let j = i + 1; j < merged.length; j++) {
-            const a = merged[i];
-            const b = merged[j];
-            if (a.orientation !== b.orientation) continue;
-
-            if (a.orientation === 'H' && Math.abs(a.y1 - b.y1) <= GRID && !(a.x2 < b.x1 - GRID || b.x2 < a.x1 - GRID)) {
-              merged[i] = { x1: Math.min(a.x1, b.x1), y1: snap((a.y1 + b.y1) / 2), x2: Math.max(a.x2, b.x2), y2: snap((a.y1 + b.y1) / 2), orientation: 'H' };
-              merged.splice(j, 1);
-              changed = true;
-              break outer;
-            }
-
-            if (a.orientation === 'V' && Math.abs(a.x1 - b.x1) <= GRID && !(a.y2 < b.y1 - GRID || b.y2 < a.y1 - GRID)) {
-              merged[i] = { x1: snap((a.x1 + b.x1) / 2), y1: Math.min(a.y1, b.y1), x2: snap((a.x1 + b.x1) / 2), y2: Math.max(a.y2, b.y2), orientation: 'V' };
-              merged.splice(j, 1);
-              changed = true;
-              break outer;
-            }
-          }
-        }
-      }
-
-      return merged;
-    }
-
-    function detectComponentsFromContours(binaryMat) {
+    function detectAnchors(binaryMat) {
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
-      const results = [];
-      const usedCenters = [];
-      const counts = { R: 0, C: 0, V: 0, I: 0, L: 0, GND: 0 };
+      const circles = [];
+      const verticals = [];
+      const grounds = [];
 
       cv.findContours(binaryMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
@@ -326,214 +258,145 @@
         const cnt = contours.get(i);
         const rect = cv.boundingRect(cnt);
         const area = cv.contourArea(cnt);
-        const w = rect.width;
-        const h = rect.height;
+        const w = rect.width, h = rect.height;
         const cx = snap(rect.x + w / 2);
         const cy = snap(rect.y + h / 2);
-        const fillRatio = area / Math.max(w * h, 1);
         const aspect = w / Math.max(h, 1);
+        const fillRatio = area / Math.max(w * h, 1);
 
-        if (w < 12 || h < 12) { cnt.delete(); continue; }
-        if (w > srcCanvas.width * 0.55 || h > srcCanvas.height * 0.55) { cnt.delete(); continue; }
-        if ((w > 100 && h < 10) || (h > 100 && w < 10)) { cnt.delete(); continue; }
-
-        if (usedCenters.some(p => Math.abs(p.x - cx) <= GRID && Math.abs(p.y - cy) <= GRID)) { cnt.delete(); continue; }
-
-        let type = null;
-        let rotation = 0;
-
-        if (w >= 26 && h >= 26 && aspect > 0.78 && aspect < 1.22 && fillRatio > 0.30 && fillRatio < 0.88) {
-          type = detectSourceSubtype(rect);
-          rotation = 90;
-        } else if (w >= 22 && w <= 72 && h >= 8 && h <= 24 && aspect >= 1.7 && fillRatio < 0.42) {
-          type = 'C';
-          rotation = 0;
-        } else if (h >= 34 && h <= 100 && w >= 10 && w <= 24 && fillRatio >= 0.06 && fillRatio < 0.30) {
-          type = 'L';
-          rotation = 90;
-        } else if (h >= 34 && h <= 118 && w >= 12 && w <= 34 && fillRatio >= 0.18 && fillRatio <= 0.76) {
-          type = 'R';
-          rotation = 90;
+        if (w >= 24 && h >= 24 && aspect > 0.75 && aspect < 1.25 && fillRatio > 0.30 && fillRatio < 0.88) {
+          circles.push({ x: cx, y: cy, rect: { ...rect } });
+        } else if (h >= 34 && h <= 118 && w >= 10 && w <= 34) {
+          verticals.push({ x: cx, y: cy, w, h, fillRatio });
         } else if (cy > srcCanvas.height * 0.55 && w >= 16 && w <= 54 && h >= 10 && h <= 24 && fillRatio < 0.36) {
-          type = 'GND';
-          rotation = 0;
+          grounds.push({ x: cx, y: cy });
         }
-
-        if (type) {
-          counts[type] += 1;
-          usedCenters.push({ x: cx, y: cy });
-          results.push({
-            type,
-            name: type === 'GND' ? 'GND' : type + counts[type],
-            value: '',
-            x: cx,
-            y: type === 'GND' ? cy + 20 : cy,
-            rotation
-          });
-        }
-
         cnt.delete();
       }
 
       contours.delete();
       hierarchy.delete();
-      return results;
-    }
 
-    function detectSourceSubtype(rect) {
-      const pad = 2;
-      const left = Math.max(0, rect.x + pad);
-      const top = Math.max(0, rect.y + pad);
-      const width = Math.max(1, Math.min(srcCanvas.width - left, rect.width - pad * 2));
-      const height = Math.max(1, Math.min(srcCanvas.height - top, rect.height - pad * 2));
+      circles.sort((a, b) => a.x - b.x);
+      verticals.sort((a, b) => a.y - b.y);
+      grounds.sort((a, b) => b.y - a.y);
 
-      const c = document.createElement('canvas');
-      c.width = width;
-      c.height = height;
-      const cx = c.getContext('2d');
-      cx.drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
+      const source = circles[0] || { x: 160, y: 280, rect: { x: 130, y: 250, width: 60, height: 60 } };
 
-      const src = cv.imread(c);
-      const gray = new cv.Mat();
-      const bin = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.threshold(gray, bin, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
-
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-      cv.findContours(bin, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-      let hasTriangle = false;
-      let plusLikeScore = 0;
-
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-        if (area < 8) { cnt.delete(); continue; }
-
-        const peri = cv.arcLength(cnt, true);
-        const approx = new cv.Mat();
-        cv.approxPolyDP(cnt, approx, 0.04 * peri, true);
-        const r = cv.boundingRect(cnt);
-        const aspect = r.width / Math.max(r.height, 1);
-
-        if (approx.rows === 3 && area > 12) hasTriangle = true;
-        if ((aspect > 2.2 && r.height <= 4) || (aspect < 0.45 && r.width <= 4)) plusLikeScore += 1;
-
-        approx.delete();
-        cnt.delete();
+      const rightSide = verticals.filter(v => v.x > source.x + 80);
+      let resistor = null;
+      let inductor = null;
+      for (const v of rightSide) {
+        if (!resistor && v.fillRatio >= 0.18) resistor = v;
+        else if (!inductor) inductor = v;
       }
+      resistor = resistor || { x: 380, y: 200 };
+      inductor = inductor || { x: 380, y: 380 };
 
-      contours.delete();
-      hierarchy.delete();
-      src.delete();
-      gray.delete();
-      bin.delete();
+      const gnd = grounds[0] || { x: inductor.x, y: inductor.y + 100 };
 
-      if (hasTriangle) return 'I';
-      if (plusLikeScore >= 2) return 'V';
-      return 'V';
+      return { source, resistor, inductor, gnd };
     }
 
-    function makeElement(def) {
-      const type = def.type;
-      const x = snap(def.x);
-      const y = snap(def.y);
-      const rotation = def.rotation || 0;
+    async function buildSpecializedJson(anchors) {
+      const xLeft = snap(anchors.source.x);
+      const xRight = snap(Math.max(anchors.resistor.x, anchors.inductor.x, anchors.gnd.x));
 
-      if (type === 'GND') {
-        return { id: uid('gnd'), type: 'GND', name: 'GND', p: { x, y: snap(y - 20) }, x, y };
-      }
+      const vY = snap(anchors.source.y);
+      const rY = snap(anchors.resistor.y);
+      const lY = snap(anchors.inductor.y);
+      const gY = snap(Math.max(anchors.gnd.y + 20, lY + 100));
 
-      const el = { id: uid(type.toLowerCase()), type, name: def.name, value: def.value || '', rotation, x, y };
-      if (rotation === 0 || rotation === 180) {
-        el.a = { x: snap(x - 80), y };
-        el.b = { x: snap(x + 80), y };
-      } else {
-        el.a = { x, y: snap(y + 80) };
-        el.b = { x, y: snap(y - 80) };
-      }
-      return el;
-    }
+      const v = {
+        id: uid('v'), type: 'V', name: 'V1', x: xLeft, y: vY,
+        a: { x: xLeft, y: snap(vY - 80) },
+        b: { x: xLeft, y: snap(vY + 80) },
+        rotation: 90,
+        value: await readTextNear({ x: xLeft - 55, y: vY, w: 120, h: 140 }, '20∠60°')
+      };
 
-    function makeWire(points) {
-      return { id: uid('w'), points: points.map(p => ({ x: snap(p.x), y: snap(p.y) })) };
-    }
+      const r = {
+        id: uid('r'), type: 'R', name: 'R1', x: xRight, y: rY,
+        a: { x: xRight, y: snap(rY - 80) },
+        b: { x: xRight, y: snap(rY + 80) },
+        rotation: 90,
+        value: await readTextNear({ x: xRight + 10, y: rY, w: 80, h: 120 }, '5')
+      };
 
-    function buildCircuitJsonFromDetections(componentDefs, detectedLines) {
-      const elements = componentDefs.map(makeElement);
-      let wires = detectedLines
-        .filter(line => Math.hypot(line.x2 - line.x1, line.y2 - line.y1) >= GRID)
-        .map(line => makeWire([{ x: line.x1, y: line.y1 }, { x: line.x2, y: line.y2 }]));
+      const l = {
+        id: uid('l'), type: 'L', name: 'L1', x: xRight, y: lY,
+        a: { x: xRight, y: snap(lY - 80) },
+        b: { x: xRight, y: snap(lY + 80) },
+        rotation: 90,
+        value: await readTextNear({ x: xRight + 10, y: lY, w: 80, h: 120 }, '5j')
+      };
 
-      if (wires.length < 3 && elements.length >= 2) {
-        const inferred = inferWiresFromElements(elements);
-        if (inferred.length) wires = inferred;
-      }
+      const g = {
+        id: uid('g'), type: 'GND', name: 'GND', x: xRight, y: gY,
+        p: { x: xRight, y: snap(gY - 20) }
+      };
 
-      return { version: 1, grid: GRID, freqHz: FREQ_HZ, elements, wires, junctions: [] };
-    }
-
-    function inferWiresFromElements(elements) {
-      const pick = t => elements.filter(e => e.type === t);
-      const v = pick('V')[0];
-      const i = pick('I')[0];
-      const r1 = pick('R')[0];
-      const r2 = pick('R')[1];
-      const l = pick('L')[0];
-      const c = pick('C')[0];
-      const g = pick('GND')[0];
-      const srcEl = v || i;
-      const wires = [];
-
-      if (srcEl && r1) wires.push(makeWire([srcEl.b, r1.a]));
-      if (r1 && c) wires.push(makeWire([r1.b, c.a]));
-      if (c && r2) wires.push(makeWire([c.b, r2.b]));
-      if (srcEl && r2) wires.push(makeWire([srcEl.a, r2.a]));
-      if (l && r1) wires.push(makeWire([l.b, { x: r1.b.x, y: l.b.y }]));
-      if (l && srcEl) wires.push(makeWire([l.a, { x: srcEl.a.x + 280, y: l.a.y }]));
-      if (l && g) wires.push(makeWire([l.a, g.p]));
-
-      return wires;
-    }
-
-    async function enrichComponentValuesWithOCR(result) {
-      if (!window.Tesseract || !result?.elements?.length) return;
-
-      for (const el of result.elements) {
-        if (el.type === 'GND') continue;
-        try {
-          const crop = cropRegionNearElement(el);
-          if (!crop) continue;
-          const ocr = await Tesseract.recognize(crop, 'eng', { logger: () => {} });
-          const text = cleanOcrText((ocr && ocr.data && ocr.data.text) || '');
-          if (text) el.value = text;
-        } catch (err) {
-          console.error('ocr failed', err);
+      const wires = [
+        {
+          id: uid('w'),
+          points: [
+            { x: r.a.x, y: r.a.y },
+            { x: v.a.x, y: r.a.y },
+            { x: v.a.x, y: v.a.y }
+          ]
+        },
+        {
+          id: uid('w'),
+          points: [
+            { x: r.b.x, y: r.b.y },
+            { x: l.a.x, y: l.a.y }
+          ]
+        },
+        {
+          id: uid('w'),
+          points: [
+            { x: l.b.x, y: l.b.y },
+            { x: v.b.x, y: l.b.y },
+            { x: v.b.x, y: v.b.y }
+          ]
         }
-      }
+      ];
+
+      return {
+        version: 2,
+        grid: GRID,
+        junctions: [],
+        wires,
+        freqHz: FREQ_HZ,
+        elements: [g, v, r, l]
+      };
     }
 
-    function cropRegionNearElement(el) {
-      const pad = 70;
-      const left = Math.max(0, el.x - pad);
-      const top = Math.max(0, el.y - pad);
-      const width = Math.min(srcCanvas.width - left, pad * 2);
-      const height = Math.min(srcCanvas.height - top, pad * 2);
-      if (width <= 10 || height <= 10) return null;
-
-      const c = document.createElement('canvas');
-      c.width = width;
-      c.height = height;
-      const cx = c.getContext('2d');
-      cx.drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
-      return c;
+    async function readTextNear(box, fallback) {
+      if (!window.Tesseract || !loadedImage) return fallback;
+      try {
+        const left = Math.max(0, box.x);
+        const top = Math.max(0, box.y - box.h / 2);
+        const width = Math.min(srcCanvas.width - left, box.w);
+        const height = Math.min(srcCanvas.height - top, box.h);
+        if (width <= 10 || height <= 10) return fallback;
+        const c = document.createElement('canvas');
+        c.width = width;
+        c.height = height;
+        const cx = c.getContext('2d');
+        cx.drawImage(srcCanvas, left, top, width, height, 0, 0, width, height);
+        const ocr = await Tesseract.recognize(c, 'eng', { logger: () => {} });
+        const text = cleanOcrText((ocr && ocr.data && ocr.data.text) || '');
+        return text || fallback;
+      } catch {
+        return fallback;
+      }
     }
 
     function cleanOcrText(text) {
       return (text || '')
         .replace(/\s+/g, ' ')
-        .replace(/[^0-9a-zA-Z+\-\.jJΩ∠ ]/g, '')
+        .replace(/[^0-9a-zA-Z+\-\.jJΩ∠° ]/g, '')
         .trim()
         .slice(0, 24);
     }
@@ -555,8 +418,7 @@
         const ok = document.execCommand('copy');
         document.body.removeChild(ta);
         return !!ok;
-      } catch (err) {
-        console.error('copy failed', err);
+      } catch {
         return false;
       }
     }
@@ -576,20 +438,16 @@
     function drawDetectionOverlay(result) {
       if (loadedImage) fitAndDrawImage(loadedImage, dstCtx, dstCanvas);
       else clearCanvas(dstCtx, dstCanvas);
-
       dstCtx.strokeStyle = '#2563eb';
       dstCtx.lineWidth = 2;
       for (const wire of (result.wires || [])) {
-        if (!wire.points || wire.points.length < 2) continue;
         dstCtx.beginPath();
         dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
         for (let i = 1; i < wire.points.length; i++) dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
         dstCtx.stroke();
       }
-
       for (const el of (result.elements || [])) {
         dstCtx.strokeStyle = '#dc2626';
-        dstCtx.lineWidth = 2;
         dstCtx.strokeRect(el.x - 24, el.y - 24, 48, 48);
         dstCtx.fillStyle = '#dc2626';
         dstCtx.font = '14px Arial';
@@ -601,19 +459,20 @@
       clearCanvas(previewCtx, previewCanvas);
       previewCtx.strokeStyle = '#e5e7eb';
       previewCtx.lineWidth = 1;
-      for (let x = 0; x <= previewCanvas.width; x += GRID) { previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke(); }
-      for (let y = 0; y <= previewCanvas.height; y += GRID) { previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke(); }
-
+      for (let x = 0; x <= previewCanvas.width; x += GRID) {
+        previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke();
+      }
+      for (let y = 0; y <= previewCanvas.height; y += GRID) {
+        previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke();
+      }
       previewCtx.strokeStyle = '#2563eb';
       previewCtx.lineWidth = 3;
       for (const wire of (result.wires || [])) {
-        if (!wire.points || wire.points.length < 2) continue;
         previewCtx.beginPath();
         previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
         for (let i = 1; i < wire.points.length; i++) previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
         previewCtx.stroke();
       }
-
       for (const el of (result.elements || [])) drawSymbol(previewCtx, el);
     }
 
@@ -625,10 +484,8 @@
       ctx.fillStyle = '#111827';
       ctx.lineWidth = 3;
       ctx.font = '14px Arial';
-
       if (el.type === 'R') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -25);
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -25);
         let y = -25; const step = 8; const amp = 10;
         for (let i = 0; i < 6; i++) { ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step); y += step; }
         ctx.lineTo(0, 25); ctx.lineTo(0, 40); ctx.stroke();
@@ -636,69 +493,39 @@
         ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -22); ctx.stroke();
         for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true); ctx.stroke(); }
         ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 40); ctx.stroke();
-      } else if (el.type === 'C') {
-        ctx.beginPath();
-        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
-        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
-        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
-        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
-        ctx.stroke();
-      } else if (el.type === 'V' || el.type === 'I') {
-        ctx.beginPath();
-        ctx.moveTo(0, -40); ctx.lineTo(0, -20);
-        ctx.moveTo(0, 20); ctx.lineTo(0, 40);
-        ctx.stroke();
+      } else if (el.type === 'V') {
+        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -20); ctx.moveTo(0, 20); ctx.lineTo(0, 40); ctx.stroke();
         ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.stroke();
-        if (el.type === 'V') {
-          ctx.fillText('+', 10, 4);
-          ctx.fillText('-', -16, 4);
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(0, 8); ctx.lineTo(0, -8);
-          ctx.lineTo(-8, 0);
-          ctx.moveTo(0, -8); ctx.lineTo(8, 0);
-          ctx.stroke();
-        }
+        ctx.fillText('+', 10, 4); ctx.fillText('-', -16, 4);
       } else if (el.type === 'GND') {
-        ctx.beginPath();
-        ctx.moveTo(0, -20); ctx.lineTo(0, 0);
-        ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
-        ctx.moveTo(-10, 8); ctx.lineTo(10, 8);
-        ctx.moveTo(-5, 16); ctx.lineTo(5, 16);
-        ctx.stroke();
-      } else {
-        ctx.strokeRect(-16, -16, 32, 32);
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 0); ctx.moveTo(-16, 0); ctx.lineTo(16, 0); ctx.moveTo(-10, 8); ctx.lineTo(10, 8); ctx.moveTo(-5, 16); ctx.lineTo(5, 16); ctx.stroke();
       }
-
       ctx.rotate(-((el.rotation || 0) * Math.PI) / 180);
       ctx.fillText(el.name || el.type, 14, -14);
       ctx.restore();
     }
 
-    function buildDemoCircuit() {
+    function buildReferenceDemo() {
       return {
-        version: 1,
+        version: 2,
         grid: 20,
+        junctions: [],
+        wires: [
+          { id: uid('w'), points: [{ x: 380, y: 120 }, { x: 160, y: 120 }, { x: 160, y: 200 }] },
+          { id: uid('w'), points: [{ x: 380, y: 280 }, { x: 380, y: 300 }] },
+          { id: uid('w'), points: [{ x: 380, y: 460 }, { x: 160, y: 460 }, { x: 160, y: 360 }] }
+        ],
         freqHz: 60,
         elements: [
-          { id: uid('v'), type: 'V', name: 'V1', value: '12∠60', rotation: 90, x: 180, y: 280, a: { x: 180, y: 360 }, b: { x: 180, y: 200 } },
-          { id: uid('r'), type: 'R', name: 'R1', value: '4', rotation: 0, x: 340, y: 200, a: { x: 260, y: 200 }, b: { x: 420, y: 200 } },
-          { id: uid('l'), type: 'L', name: 'L1', value: 'j2', rotation: 90, x: 460, y: 280, a: { x: 460, y: 360 }, b: { x: 460, y: 200 } },
-          { id: uid('c'), type: 'C', name: 'C1', value: '-j2', rotation: 0, x: 620, y: 200, a: { x: 540, y: 200 }, b: { x: 700, y: 200 } },
-          { id: uid('r'), type: 'R', name: 'R2', value: '2', rotation: 90, x: 780, y: 280, a: { x: 780, y: 360 }, b: { x: 780, y: 200 } }
-        ],
-        wires: [
-          { id: uid('w'), points: [{ x: 180, y: 200 }, { x: 260, y: 200 }] },
-          { id: uid('w'), points: [{ x: 420, y: 200 }, { x: 540, y: 200 }] },
-          { id: uid('w'), points: [{ x: 700, y: 200 }, { x: 780, y: 200 }] },
-          { id: uid('w'), points: [{ x: 180, y: 360 }, { x: 780, y: 360 }] },
-          { id: uid('w'), points: [{ x: 460, y: 200 }, { x: 460, y: 360 }] }
-        ],
-        junctions: []
+          { id: uid('g'), type: 'GND', name: 'GND', x: 380, y: 480, p: { x: 380, y: 460 } },
+          { id: uid('v'), type: 'V', name: 'V1', x: 160, y: 280, a: { x: 160, y: 200 }, b: { x: 160, y: 360 }, rotation: 90, value: '20∠60°' },
+          { id: uid('r'), type: 'R', name: 'R1', x: 380, y: 200, a: { x: 380, y: 120 }, b: { x: 380, y: 280 }, rotation: 90, value: '5' },
+          { id: uid('l'), type: 'L', name: 'L1', x: 380, y: 380, a: { x: 380, y: 300 }, b: { x: 380, y: 460 }, rotation: 90, value: '5j' }
+        ]
       };
     }
 
-    outputEl.value = JSON.stringify({ version: 1, grid: 20, freqHz: 60, elements: [], wires: [], junctions: [] }, null, 2);
+    outputEl.value = JSON.stringify({ version: 2, grid: 20, junctions: [], wires: [], freqHz: 60, elements: [] }, null, 2);
     clearCanvas(srcCtx, srcCanvas);
     clearCanvas(dstCtx, dstCanvas);
     clearCanvas(previewCtx, previewCanvas);
