@@ -268,62 +268,78 @@
 
       // 強制相對位置，讓版型穩定
       const nodeAX = snap(Math.max(topRes.x + 100, shuntL.x));
+      const sourceX = snap(source.x);
+      const sourceY = snap(source.y);
+      const nodeAY = snap(Math.min(topRes.y, cap.y, shuntL.y - 120));
+      const rightX = snap(Math.max(rightR.x, nodeAX + 220));
+      const bottomY = snap(Math.max(shuntL.y + 120, rightR.y + 120, source.y + 80));
+
       return {
-        sourceX: snap(source.x),
-        sourceY: snap(source.y),
-        r1X: snap(Math.min(topRes.x, nodeAX - 120)),
-        r1Y: snap(topRes.y),
+        sourceX,
+        sourceY,
         nodeAX,
-        nodeAY: snap(Math.min(topRes.y, cap.y, shuntL.y - 120)),
-        l1X: snap(nodeAX),
-        l1Y: snap(shuntL.y),
-        c1X: snap(Math.max(cap.x, nodeAX + 140)),
-        c1Y: snap(cap.y),
-        r2X: snap(Math.max(rightR.x, (cap.x || nodeAX + 160))),
-        r2Y: snap(rightR.y),
-        bottomY: snap(Math.max(shuntL.y + 120, rightR.y + 120, source.y + 80))
+        nodeAY,
+        rightX,
+        bottomY
       };
     }
 
     async function buildTopologyJson(a) {
+      const sourceTopY = snap(a.sourceY - 80);
+      const sourceBottomY = snap(a.sourceY + 80);
+      const nodeAY = a.nodeAY;
+      const nodeAX = a.nodeAX;
+      const bottomY = a.bottomY;
+      const rightX = a.rightX;
+
+      const r1CenterX = snap((a.sourceX + nodeAX) / 2);
+      const c1CenterX = snap((nodeAX + rightX) / 2);
+      const l1CenterY = snap((nodeAY + bottomY) / 2);
+      const r2CenterY = snap((nodeAY + bottomY) / 2);
+
       const source = {
         id: uid('v'), type: 'V', name: 'V1', x: a.sourceX, y: a.sourceY,
-        a: { x: a.sourceX, y: snap(a.sourceY - 80) },
-        b: { x: a.sourceX, y: snap(a.sourceY + 80) },
+        a: { x: a.sourceX, y: sourceTopY },
+        b: { x: a.sourceX, y: sourceBottomY },
         rotation: 90,
         value: ''
       };
 
       const r1 = {
-        id: uid('r'), type: 'R', name: 'R1', x: a.r1X, y: a.nodeAY,
-        a: { x: snap(a.r1X - 80), y: a.nodeAY },
-        b: { x: snap(a.r1X + 80), y: a.nodeAY },
+        id: uid('r'), type: 'R', name: 'R1', x: r1CenterX, y: nodeAY,
+        a: { x: a.sourceX, y: nodeAY },
+        b: { x: nodeAX, y: nodeAY },
         rotation: 0,
         value: ''
       };
 
       const l1 = {
-        id: uid('l'), type: 'L', name: 'L1', x: a.l1X, y: a.l1Y,
-        a: { x: a.l1X, y: snap(a.l1Y - 80) },
-        b: { x: a.l1X, y: snap(a.l1Y + 80) },
+        id: uid('l'), type: 'L', name: 'L1', x: nodeAX, y: l1CenterY,
+        a: { x: nodeAX, y: nodeAY },
+        b: { x: nodeAX, y: bottomY },
         rotation: 90,
         value: ''
       };
 
       const c1 = {
-        id: uid('c'), type: 'C', name: 'C1', x: a.c1X, y: a.nodeAY,
-        a: { x: snap(a.c1X - 80), y: a.nodeAY },
-        b: { x: snap(a.c1X + 80), y: a.nodeAY },
+        id: uid('c'), type: 'C', name: 'C1', x: c1CenterX, y: nodeAY,
+        a: { x: nodeAX, y: nodeAY },
+        b: { x: rightX, y: nodeAY },
         rotation: 0,
         value: ''
       };
 
       const r2 = {
-        id: uid('r'), type: 'R', name: 'R2', x: a.r2X, y: a.r2Y,
-        a: { x: a.r2X, y: snap(a.r2Y + 80) },
-        b: { x: a.r2X, y: snap(a.r2Y - 80) },
+        id: uid('r'), type: 'R', name: 'R2', x: rightX, y: r2CenterY,
+        a: { x: rightX, y: bottomY },
+        b: { x: rightX, y: nodeAY },
         rotation: 90,
         value: ''
+      };
+
+      const gnd = {
+        id: uid('g'), type: 'GND', name: 'GND', x: nodeAX, y: snap(bottomY + 20),
+        p: { x: nodeAX, y: bottomY }
       };
 
       const wires = [
@@ -331,40 +347,45 @@
           id: uid('w'),
           points: [
             { x: source.a.x, y: source.a.y },
-            { x: source.a.x, y: a.nodeAY },
-            { x: r1.a.x, y: a.nodeAY }
+            { x: source.a.x, y: nodeAY },
+            { x: r1.a.x, y: r1.a.y }
           ]
         },
         {
           id: uid('w'),
           points: [
-            { x: r1.b.x, y: a.nodeAY },
-            { x: a.nodeAX, y: a.nodeAY },
-            { x: c1.a.x, y: a.nodeAY }
+            { x: r1.b.x, y: r1.b.y },
+            { x: c1.a.x, y: c1.a.y }
           ]
         },
         {
           id: uid('w'),
           points: [
-            { x: a.nodeAX, y: a.nodeAY },
-            { x: l1.a.x, y: l1.a.y }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: c1.b.x, y: a.nodeAY },
-            { x: r2.b.x, y: a.nodeAY },
+            { x: c1.b.x, y: c1.b.y },
             { x: r2.b.x, y: r2.b.y }
           ]
         },
         {
           id: uid('w'),
           points: [
+            { x: l1.a.x, y: l1.a.y },
+            { x: nodeAX, y: nodeAY }
+          ]
+        },
+        {
+          id: uid('w'),
+          points: [
             { x: source.b.x, y: source.b.y },
-            { x: source.b.x, y: a.bottomY },
-            { x: l1.b.x, y: a.bottomY },
-            { x: r2.a.x, y: a.bottomY }
+            { x: source.b.x, y: bottomY },
+            { x: l1.b.x, y: l1.b.y },
+            { x: r2.a.x, y: r2.a.y }
+          ]
+        },
+        {
+          id: uid('w'),
+          points: [
+            { x: l1.b.x, y: l1.b.y },
+            { x: gnd.p.x, y: gnd.p.y }
           ]
         }
       ];
@@ -375,7 +396,7 @@
         junctions: [],
         wires,
         freqHz: FREQ_HZ,
-        elements: [source, r1, l1, c1, r2]
+        elements: [source, r1, l1, c1, r2, gnd]
       };
     }
 
