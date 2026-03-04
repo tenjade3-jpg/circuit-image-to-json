@@ -108,6 +108,9 @@
     }
     @media (max-width: 1000px) {
       .layout { grid-template-columns: 1fr; }
+      .canvas-wrap { grid-template-columns: 1fr !important; }
+      textarea { min-height: 360px; }
+    }
       .canvas-wrap { grid-template-columns: 1fr; }
       textarea { min-height: 360px; }
     }
@@ -132,7 +135,7 @@
 
     <div class="layout">
       <div class="card">
-        <div class="canvas-wrap">
+        <div class="canvas-wrap" style="grid-template-columns: 1fr 1fr 1fr;">
           <div>
             <h3 class="panel-title">原始圖片</h3>
             <canvas id="srcCanvas" width="700" height="500"></canvas>
@@ -140,6 +143,10 @@
           <div>
             <h3 class="panel-title">處理結果 / 標記</h3>
             <canvas id="dstCanvas" width="700" height="500"></canvas>
+          </div>
+          <div>
+            <h3 class="panel-title">JSON 預覽圖</h3>
+            <canvas id="previewCanvas" width="700" height="500"></canvas>
           </div>
         </div>
         <div class="small">
@@ -183,6 +190,7 @@
       C: null,
       V: null,
       I: null,
+      L: null,
       GND: null
     };
 
@@ -195,8 +203,10 @@
 
     const srcCanvas = document.getElementById('srcCanvas');
     const dstCanvas = document.getElementById('dstCanvas');
+    const previewCanvas = document.getElementById('previewCanvas');
     const srcCtx = srcCanvas.getContext('2d');
     const dstCtx = dstCanvas.getContext('2d');
+    const previewCtx = previewCanvas.getContext('2d');
 
     let loadedImage = null;
     let lastResult = null;
@@ -270,20 +280,23 @@
         const result = processCircuitImage();
         lastResult = result;
         outputEl.value = JSON.stringify(result, null, 2);
-        exportJsonFile(result, 'circuit.json');
-        setStatus('辨識完成，已自動下載 JSON');
+        drawJsonPreview(result);
+        const copied = await copyJsonToClipboard(result);
+        setStatus(copied ? '辨識完成，JSON 已自動複製' : '辨識完成，但自動複製失敗，可手動複製');
       } catch (err) {
         console.error(err);
         setStatus('辨識失敗：' + err.message);
       }
     });
 
-    demoBtn.addEventListener('click', () => {
+    demoBtn.addEventListener('click', async () => {
       const result = buildDemoCircuit();
       lastResult = result;
       outputEl.value = JSON.stringify(result, null, 2);
       drawDetectionOverlay(result);
-      setStatus('已載入示範結果');
+      drawJsonPreview(result);
+      const copied = await copyJsonToClipboard(result);
+      setStatus(copied ? '已載入示範結果，JSON 已自動複製' : '已載入示範結果');
     });
 
     downloadBtn.addEventListener('click', () => {
@@ -463,6 +476,7 @@
       let rCount = 0;
       let cCount = 0;
       let vCount = 0;
+      let lCount = 0;
       let gCount = 0;
 
       for (let i = 0; i < contours.size(); i++) {
@@ -525,6 +539,18 @@
             x: cx,
             y: cy,
             rotation: 0
+          };
+        }
+        // 中等高度且較窄，但填充率偏低：當電感候選
+        else if (h >= 24 && h <= 90 && w >= 12 && w <= 40 && fillRatio < 0.42) {
+          lCount += 1;
+          item = {
+            type: 'L',
+            name: 'L' + lCount,
+            value: '',
+            x: cx,
+            y: cy,
+            rotation: 90
           };
         }
         // 直向元件：先當電阻候選
@@ -640,6 +666,7 @@
 
       const i = findByType('I')[0];
       const r = findByType('R')[0];
+      const l = findByType('L')[0];
       const c = findByType('C')[0];
       const v = findByType('V')[0];
       const g = findByType('GND')[0];
@@ -648,12 +675,123 @@
 
       if (i && r) wires.push(makeWire([i.b, { x: r.a.x, y: i.b.y }]));
       if (r && c) wires.push(makeWire([{ x: r.a.x + 20, y: r.a.y }, c.a]));
+      if (l && c) wires.push(makeWire([{ x: l.a.x, y: c.a.y }, c.a]));
       if (c && v) wires.push(makeWire([c.b, v.b]));
       if (i && r) wires.push(makeWire([i.a, r.b]));
+      if (r && l) wires.push(makeWire([r.b, l.b]));
       if (r && v) wires.push(makeWire([r.b, v.a]));
+      if (l && g) wires.push(makeWire([l.b, g.p]));
       if (r && g) wires.push(makeWire([r.b, g.p]));
 
       return wires;
+    }
+
+    function drawJsonPreview(result) {
+      clearCanvas(previewCtx, previewCanvas);
+      previewCtx.strokeStyle = '#e5e7eb';
+      previewCtx.lineWidth = 1;
+      for (let x = 0; x <= previewCanvas.width; x += GRID) {
+        previewCtx.beginPath();
+        previewCtx.moveTo(x, 0);
+        previewCtx.lineTo(x, previewCanvas.height);
+        previewCtx.stroke();
+      }
+      for (let y = 0; y <= previewCanvas.height; y += GRID) {
+        previewCtx.beginPath();
+        previewCtx.moveTo(0, y);
+        previewCtx.lineTo(previewCanvas.width, y);
+        previewCtx.stroke();
+      }
+
+      previewCtx.strokeStyle = '#2563eb';
+      previewCtx.lineWidth = 3;
+      for (const wire of result.wires || []) {
+        if (!wire.points || wire.points.length < 2) continue;
+        previewCtx.beginPath();
+        previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
+        for (let i = 1; i < wire.points.length; i++) {
+          previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
+        }
+        previewCtx.stroke();
+      }
+
+      for (const el of result.elements || []) {
+        drawSymbol(previewCtx, el);
+      }
+    }
+
+    function drawSymbol(ctx, el) {
+      ctx.save();
+      ctx.translate(el.x, el.y);
+      ctx.strokeStyle = '#111827';
+      ctx.fillStyle = '#111827';
+      ctx.lineWidth = 3;
+      ctx.font = '14px Arial';
+
+      if (el.type === 'R') {
+        ctx.beginPath();
+        ctx.moveTo(0, -40); ctx.lineTo(0, -25);
+        let y = -25;
+        const step = 8;
+        const amp = 10;
+        for (let i = 0; i < 6; i++) {
+          ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step);
+          y += step;
+        }
+        ctx.lineTo(0, 25); ctx.lineTo(0, 40);
+        ctx.stroke();
+      } else if (el.type === 'L') {
+        ctx.beginPath();
+        ctx.moveTo(0, -40); ctx.lineTo(0, -22);
+        ctx.stroke();
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true);
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.moveTo(0, 22); ctx.lineTo(0, 40);
+        ctx.stroke();
+      } else if (el.type === 'C') {
+        ctx.beginPath();
+        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
+        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
+        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
+        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
+        ctx.stroke();
+      } else if (el.type === 'V' || el.type === 'I') {
+        ctx.beginPath();
+        ctx.moveTo(0, -40); ctx.lineTo(0, -20);
+        ctx.moveTo(0, 20); ctx.lineTo(0, 40);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, Math.PI * 2);
+        ctx.stroke();
+        if (el.type === 'V') {
+          ctx.fillText('+', 10, 4);
+          ctx.fillText('-', -16, 4);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(0, 8);
+          ctx.lineTo(0, -8);
+          ctx.lineTo(-8, 0);
+          ctx.moveTo(0, -8);
+          ctx.lineTo(8, 0);
+          ctx.stroke();
+        }
+      } else if (el.type === 'GND') {
+        ctx.beginPath();
+        ctx.moveTo(0, -20); ctx.lineTo(0, 0);
+        ctx.moveTo(-16, 0); ctx.lineTo(16, 0);
+        ctx.moveTo(-10, 8); ctx.lineTo(10, 8);
+        ctx.moveTo(-5, 16); ctx.lineTo(5, 16);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(-16, -16, 32, 32);
+      }
+
+      ctx.fillText(el.name || el.type, 14, -14);
+      ctx.restore();
     }
 
     function drawDetectionOverlay(result) {
@@ -696,6 +834,30 @@
           dstCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
           dstCtx.fill();
         }
+      }
+    }
+
+    async function copyJsonToClipboard(data) {
+      const jsonText = JSON.stringify(data, null, 2);
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(jsonText);
+          return true;
+        }
+
+        const ta = document.createElement('textarea');
+        ta.value = jsonText;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return !!ok;
+      } catch (err) {
+        console.error('copy failed', err);
+        return false;
       }
     }
 
@@ -794,6 +956,7 @@
 
     clearCanvas(srcCtx, srcCanvas);
     clearCanvas(dstCtx, dstCanvas);
+    clearCanvas(previewCtx, previewCanvas);
   </script>
 </body>
 </html>
