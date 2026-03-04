@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>電路圖辨識專用版 v6</title>
+  <title>電路圖辨識多版型 v7</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; background: #f3f4f6; color: #111827; }
@@ -32,8 +32,8 @@
 </head>
 <body>
   <div class="container">
-    <h1>電路圖辨識專用版 v6</h1>
-    <p class="desc">專門辨識這種版型：左側電壓源、左上串聯電阻、中間並聯電感、上方串聯電容、右側電阻。</p>
+    <h1>電路圖辨識多版型 v7</h1>
+    <p class="desc">自動判斷常見固定版型，並輸出穩定 JSON。支援：單回路 RL、串並聯 RLC、雙支路並聯 RC。</p>
     <div id="status" class="status">OpenCV.js 載入中…</div>
 
     <div class="toolbar">
@@ -47,18 +47,18 @@
         <div class="canvas-wrap">
           <div>
             <h3 class="panel-title">原始圖片</h3>
-            <canvas id="srcCanvas" width="800" height="520"></canvas>
+            <canvas id="srcCanvas" width="820" height="560"></canvas>
           </div>
           <div>
             <h3 class="panel-title">處理結果 / 標記</h3>
-            <canvas id="dstCanvas" width="800" height="520"></canvas>
+            <canvas id="dstCanvas" width="820" height="560"></canvas>
           </div>
           <div>
             <h3 class="panel-title">JSON 預覽圖</h3>
-            <canvas id="previewCanvas" width="800" height="520"></canvas>
+            <canvas id="previewCanvas" width="820" height="560"></canvas>
           </div>
         </div>
-        <div class="small">固定拓撲輸出：V → R(上左) → 節點A；節點A 向下接 L；節點A 向右串接 C；右端向下接 R；底部回到來源。</div>
+        <div class="small">內建版型判斷：<br>① 單回路：V + R + L<br>② 上方主幹 + 中間支路 + 右支路：V + R + L + C + R<br>③ 上方主幹 + 中間支路電阻 + 右支路電阻電容：V + R + R + C + GND</div>
       </div>
       <div class="card">
         <h3 class="panel-title">輸出 JSON</h3>
@@ -77,7 +77,6 @@
     };
   </script>
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <script>
     const GRID = 20;
@@ -148,7 +147,7 @@
       if (!loadedImage) return alert('請先上傳圖片');
       try {
         setStatus('辨識中…');
-        const result = await processCircuitImage();
+        const result = processCircuitImage();
         lastResult = result;
         outputEl.value = JSON.stringify(result, null, 2);
         drawJsonPreview(result);
@@ -165,7 +164,7 @@
       exportJsonFile(lastResult, 'circuit.json');
     });
 
-    async function processCircuitImage() {
+    function processCircuitImage() {
       const src = cv.imread(srcCanvas);
       const gray = new cv.Mat();
       const binary = new cv.Mat();
@@ -177,8 +176,9 @@
       cv.cvtColor(clean, src, cv.COLOR_GRAY2RGBA);
       cv.imshow(dstCanvas, src);
 
-      const anchors = detectAnchors(clean);
-      const result = await buildTopologyJson(anchors);
+      const metrics = extractMetrics(clean);
+      const mode = decideTopology(metrics);
+      const result = buildJsonByMode(mode, metrics);
       drawDetectionOverlay(result);
 
       src.delete(); gray.delete(); binary.delete(); clean.delete();
@@ -217,12 +217,13 @@
       hierarchy.delete();
     }
 
-    function detectAnchors(binaryMat) {
+    function extractMetrics(binaryMat) {
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       const circles = [];
       const horiz = [];
       const vert = [];
+      const grounds = [];
 
       cv.findContours(binaryMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
       for (let i = 0; i < contours.size(); i++) {
@@ -235,12 +236,14 @@
         const aspect = w / Math.max(h, 1);
         const fill = area / Math.max(w * h, 1);
 
-        if (w >= 24 && h >= 24 && aspect > 0.75 && aspect < 1.25 && fill > 0.28 && fill < 0.9) {
-          circles.push({ x: cx, y: cy, rect });
-        } else if (w >= 22 && w <= 80 && h >= 8 && h <= 28) {
+        if (w >= 24 && h >= 24 && aspect > 0.75 && aspect < 1.25 && fill > 0.25 && fill < 0.92) {
+          circles.push({ x: cx, y: cy });
+        } else if (w >= 22 && w <= 90 && h >= 8 && h <= 32) {
           horiz.push({ x: cx, y: cy, w, h, fill });
-        } else if (h >= 34 && h <= 130 && w >= 10 && w <= 36) {
+        } else if (h >= 30 && h <= 150 && w >= 10 && w <= 40) {
           vert.push({ x: cx, y: cy, w, h, fill });
+        } else if (w >= 16 && w <= 60 && h >= 10 && h <= 26 && cy > srcCanvas.height * 0.55) {
+          grounds.push({ x: cx, y: cy });
         }
         cnt.delete();
       }
@@ -248,155 +251,136 @@
       hierarchy.delete();
 
       circles.sort((a, b) => a.x - b.x);
-      horiz.sort((a, b) => a.x - b.x);
+      horiz.sort((a, b) => a.x - b.x || a.y - b.y);
       vert.sort((a, b) => a.x - b.x || a.y - b.y);
 
-      const source = circles[0] || { x: 140, y: 300 };
-      const rightOfSourceHoriz = horiz.filter(h => h.x > source.x + 40);
-      const topRes = rightOfSourceHoriz[0] || { x: 300, y: 160 };
-      const cap = rightOfSourceHoriz[rightOfSourceHoriz.length - 1] || { x: 520, y: 160 };
-
-      const rightOfSourceVert = vert.filter(v => v.x > source.x + 80);
-      let shuntL = null;
-      let rightR = null;
-      for (const v of rightOfSourceVert) {
-        if (!shuntL) shuntL = v;
-        else rightR = v;
-      }
-      shuntL = shuntL || { x: 420, y: 300 };
-      rightR = rightR || { x: 640, y: 300 };
-
-      // 強制相對位置，讓版型穩定
-      const nodeAX = snap(Math.max(topRes.x + 100, shuntL.x));
-      const sourceX = snap(source.x);
-      const sourceY = snap(source.y);
-      const nodeAY = snap(Math.min(topRes.y, cap.y, shuntL.y - 120));
-      const rightX = snap(Math.max(rightR.x, nodeAX + 220));
-      const bottomY = snap(Math.max(shuntL.y + 120, rightR.y + 120, source.y + 80));
-
       return {
-        sourceX,
-        sourceY,
-        nodeAX,
-        nodeAY,
-        rightX,
-        bottomY
+        circles,
+        horiz,
+        vert,
+        grounds,
+        width: srcCanvas.width,
+        height: srcCanvas.height
       };
     }
 
-    async function buildTopologyJson(a) {
-      const sourceTopY = snap(a.sourceY - 80);
-      const sourceBottomY = snap(a.sourceY + 80);
-      const nodeAY = a.nodeAY;
-      const nodeAX = a.nodeAX;
-      const bottomY = a.bottomY;
-      const rightX = a.rightX;
+    function decideTopology(m) {
+      const source = m.circles[0] || { x: 160, y: 280 };
+      const rightVerts = m.vert.filter(v => v.x > source.x + 80);
+      const horizNearTop = m.horiz.filter(h => h.y < m.height * 0.45);
+      const groundCount = m.grounds.length;
 
-      const r1CenterX = snap((a.sourceX + nodeAX) / 2);
-      const c1CenterX = snap((nodeAX + rightX) / 2);
-      const l1CenterY = snap((nodeAY + bottomY) / 2);
-      const r2CenterY = snap((nodeAY + bottomY) / 2);
+      if (rightVerts.length <= 2 && horizNearTop.length <= 1) {
+        return 'single_rl';
+      }
 
-      const source = {
-        id: uid('v'), type: 'V', name: 'V1', x: a.sourceX, y: a.sourceY,
-        a: { x: a.sourceX, y: sourceTopY },
-        b: { x: a.sourceX, y: sourceBottomY },
-        rotation: 90,
-        value: ''
-      };
+      if (groundCount >= 1 && rightVerts.length >= 2 && horizNearTop.length >= 1) {
+        return 'parallel_rc';
+      }
 
-      const r1 = {
-        id: uid('r'), type: 'R', name: 'R1', x: r1CenterX, y: nodeAY,
-        a: { x: a.sourceX, y: nodeAY },
-        b: { x: nodeAX, y: nodeAY },
-        rotation: 0,
-        value: ''
-      };
+      return 'series_shunt_rlc';
+    }
 
-      const l1 = {
-        id: uid('l'), type: 'L', name: 'L1', x: nodeAX, y: l1CenterY,
-        a: { x: nodeAX, y: nodeAY },
-        b: { x: nodeAX, y: bottomY },
-        rotation: 90,
-        value: ''
-      };
+    function buildJsonByMode(mode, m) {
+      if (mode === 'single_rl') return buildSingleRL(m);
+      if (mode === 'parallel_rc') return buildParallelRC(m);
+      return buildSeriesShuntRLC(m);
+    }
 
-      const c1 = {
-        id: uid('c'), type: 'C', name: 'C1', x: c1CenterX, y: nodeAY,
-        a: { x: nodeAX, y: nodeAY },
-        b: { x: rightX, y: nodeAY },
-        rotation: 0,
-        value: ''
-      };
+    function buildSingleRL(m) {
+      const source = m.circles[0] || { x: 180, y: 280 };
+      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.y-b.y);
+      const xLeft = snap(source.x);
+      const xRight = snap((rightVerts[0]?.x) || 380);
+      const vY = snap(source.y);
+      const rY = snap((rightVerts[0]?.y) || 200);
+      const lY = snap((rightVerts[1]?.y) || 380);
 
-      const r2 = {
-        id: uid('r'), type: 'R', name: 'R2', x: rightX, y: r2CenterY,
-        a: { x: rightX, y: bottomY },
-        b: { x: rightX, y: nodeAY },
-        rotation: 90,
-        value: ''
-      };
-
-      const gnd = {
-        id: uid('g'), type: 'GND', name: 'GND', x: nodeAX, y: snap(bottomY + 20),
-        p: { x: nodeAX, y: bottomY }
-      };
-
-      const wires = [
-        {
-          id: uid('w'),
-          points: [
-            { x: source.a.x, y: source.a.y },
-            { x: source.a.x, y: nodeAY },
-            { x: r1.a.x, y: r1.a.y }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: r1.b.x, y: r1.b.y },
-            { x: c1.a.x, y: c1.a.y }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: c1.b.x, y: c1.b.y },
-            { x: r2.b.x, y: r2.b.y }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: l1.a.x, y: l1.a.y },
-            { x: nodeAX, y: nodeAY }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: source.b.x, y: source.b.y },
-            { x: source.b.x, y: bottomY },
-            { x: l1.b.x, y: l1.b.y },
-            { x: r2.a.x, y: r2.a.y }
-          ]
-        },
-        {
-          id: uid('w'),
-          points: [
-            { x: l1.b.x, y: l1.b.y },
-            { x: gnd.p.x, y: gnd.p.y }
-          ]
-        }
-      ];
+      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: xLeft, y: vY, a: { x: xLeft, y: snap(vY - 80) }, b: { x: xLeft, y: snap(vY + 80) }, rotation: 90, value: '' };
+      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: xRight, y: rY, a: { x: xRight, y: snap(rY - 80) }, b: { x: xRight, y: snap(rY + 80) }, rotation: 90, value: '' };
+      const L1 = { id: uid('l'), type: 'L', name: 'L1', x: xRight, y: lY, a: { x: xRight, y: snap(lY - 80) }, b: { x: xRight, y: snap(lY + 80) }, rotation: 90, value: '' };
+      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: xRight, y: snap(L1.b.y + 20), p: { x: xRight, y: L1.b.y } };
 
       return {
         version: 2,
         grid: GRID,
         junctions: [],
-        wires,
+        wires: [
+          { id: uid('w'), points: [{ x: R1.a.x, y: R1.a.y }, { x: V1.a.x, y: R1.a.y }, { x: V1.a.x, y: V1.a.y }] },
+          { id: uid('w'), points: [{ x: R1.b.x, y: R1.b.y }, { x: L1.a.x, y: L1.a.y }] },
+          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: V1.b.x, y: L1.b.y }, { x: V1.b.x, y: V1.b.y }] },
+          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: GND.p.x, y: GND.p.y }] }
+        ],
         freqHz: FREQ_HZ,
-        elements: [source, r1, l1, c1, r2, gnd]
+        elements: [GND, V1, R1, L1]
+      };
+    }
+
+    function buildSeriesShuntRLC(m) {
+      const source = m.circles[0] || { x: 140, y: 300 };
+      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.x-b.x||a.y-b.y);
+      const horizTop = m.horiz.filter(h => h.y < m.height * 0.45).sort((a,b)=>a.x-b.x);
+
+      const sourceX = snap(source.x);
+      const sourceY = snap(source.y);
+      const nodeAY = snap(Math.min(horizTop[0]?.y || 160, horizTop[horizTop.length-1]?.y || 160, (rightVerts[0]?.y || 300) - 120));
+      const nodeAX = snap((rightVerts[0]?.x) || 420);
+      const rightX = snap(Math.max((rightVerts[1]?.x) || (nodeAX + 220), nodeAX + 220));
+      const bottomY = snap(Math.max((rightVerts[0]?.y || 300) + 120, (rightVerts[1]?.y || 300) + 120, sourceY + 80));
+
+      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: sourceX, y: sourceY, a: { x: sourceX, y: snap(sourceY - 80) }, b: { x: sourceX, y: snap(sourceY + 80) }, rotation: 90, value: '' };
+      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: snap((sourceX + nodeAX)/2), y: nodeAY, a: { x: sourceX, y: nodeAY }, b: { x: nodeAX, y: nodeAY }, rotation: 0, value: '' };
+      const L1 = { id: uid('l'), type: 'L', name: 'L1', x: nodeAX, y: snap((nodeAY + bottomY)/2), a: { x: nodeAX, y: nodeAY }, b: { x: nodeAX, y: bottomY }, rotation: 90, value: '' };
+      const C1 = { id: uid('c'), type: 'C', name: 'C1', x: snap((nodeAX + rightX)/2), y: nodeAY, a: { x: nodeAX, y: nodeAY }, b: { x: rightX, y: nodeAY }, rotation: 0, value: '' };
+      const R2 = { id: uid('r'), type: 'R', name: 'R2', x: rightX, y: snap((nodeAY + bottomY)/2), a: { x: rightX, y: bottomY }, b: { x: rightX, y: nodeAY }, rotation: 90, value: '' };
+      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: nodeAX, y: snap(bottomY + 20), p: { x: nodeAX, y: bottomY } };
+
+      return {
+        version: 2,
+        grid: GRID,
+        junctions: [],
+        wires: [
+          { id: uid('w'), points: [{ x: V1.a.x, y: V1.a.y }, { x: V1.a.x, y: nodeAY }, { x: R1.a.x, y: R1.a.y }] },
+          { id: uid('w'), points: [{ x: R1.b.x, y: R1.b.y }, { x: C1.a.x, y: C1.a.y }] },
+          { id: uid('w'), points: [{ x: C1.b.x, y: C1.b.y }, { x: R2.b.x, y: R2.b.y }] },
+          { id: uid('w'), points: [{ x: L1.a.x, y: L1.a.y }, { x: nodeAX, y: nodeAY }] },
+          { id: uid('w'), points: [{ x: V1.b.x, y: V1.b.y }, { x: V1.b.x, y: bottomY }, { x: L1.b.x, y: L1.b.y }, { x: R2.a.x, y: R2.a.y }] },
+          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: GND.p.x, y: GND.p.y }] }
+        ],
+        freqHz: FREQ_HZ,
+        elements: [V1, R1, L1, C1, R2, GND]
+      };
+    }
+
+    function buildParallelRC(m) {
+      const source = m.circles[0] || { x: 160, y: 260 };
+      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.x-b.x||a.y-b.y);
+      const grounds = m.grounds.sort((a,b)=>b.y-a.y);
+
+      const leftX = snap(source.x);
+      const topY = snap((source.y || 260) - 80);
+      const bottomY = snap(Math.max((grounds[0]?.y || 420), (source.y || 260) + 100));
+      const midX = snap((rightVerts[0]?.x) || 360);
+      const rightX = snap(Math.max((rightVerts[1]?.x) || 560, midX + 180));
+      const sourceY = snap((topY + bottomY)/2);
+
+      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: leftX, y: sourceY, a: { x: leftX, y: topY }, b: { x: leftX, y: bottomY }, rotation: 90, value: '' };
+      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: midX, y: snap((topY + bottomY)/2), a: { x: midX, y: topY }, b: { x: midX, y: bottomY }, rotation: 90, value: '' };
+      const R2 = { id: uid('r'), type: 'R', name: 'R2', x: rightX, y: snap((topY + bottomY)/2 - 80), a: { x: rightX, y: snap((topY + bottomY)/2) }, b: { x: rightX, y: topY }, rotation: 90, value: '' };
+      const C1 = { id: uid('c'), type: 'C', name: 'C1', x: rightX, y: snap((topY + bottomY)/2 + 80), a: { x: rightX, y: bottomY }, b: { x: rightX, y: snap((topY + bottomY)/2) }, rotation: 90, value: '' };
+      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: midX, y: snap(bottomY + 20), p: { x: midX, y: bottomY } };
+
+      return {
+        version: 2,
+        grid: GRID,
+        junctions: [],
+        wires: [
+          { id: uid('w'), points: [{ x: leftX, y: topY }, { x: midX, y: topY }, { x: rightX, y: topY }] },
+          { id: uid('w'), points: [{ x: leftX, y: bottomY }, { x: midX, y: bottomY }, { x: rightX, y: bottomY }] },
+          { id: uid('w'), points: [{ x: midX, y: bottomY }, { x: GND.p.x, y: GND.p.y }] }
+        ],
+        freqHz: FREQ_HZ,
+        elements: [V1, R1, R2, C1, GND]
       };
     }
 
@@ -457,12 +441,8 @@
       clearCanvas(previewCtx, previewCanvas);
       previewCtx.strokeStyle = '#e5e7eb';
       previewCtx.lineWidth = 1;
-      for (let x = 0; x <= previewCanvas.width; x += GRID) {
-        previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke();
-      }
-      for (let y = 0; y <= previewCanvas.height; y += GRID) {
-        previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke();
-      }
+      for (let x = 0; x <= previewCanvas.width; x += GRID) { previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke(); }
+      for (let y = 0; y <= previewCanvas.height; y += GRID) { previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke(); }
       previewCtx.strokeStyle = '#2563eb';
       previewCtx.lineWidth = 3;
       for (const wire of result.wires || []) {
@@ -500,18 +480,28 @@
         for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true); ctx.stroke(); }
         ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 40); ctx.stroke();
       } else if (el.type === 'C') {
-        ctx.beginPath();
-        ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
-        ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
-        ctx.moveTo(8, -18); ctx.lineTo(8, 18);
-        ctx.moveTo(12, 0); ctx.lineTo(40, 0);
-        ctx.stroke();
+        if ((el.rotation || 0) === 90) {
+          ctx.beginPath();
+          ctx.moveTo(0, -40); ctx.lineTo(0, -12);
+          ctx.moveTo(-18, -8); ctx.lineTo(18, -8);
+          ctx.moveTo(-18, 8); ctx.lineTo(18, 8);
+          ctx.moveTo(0, 12); ctx.lineTo(0, 40);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
+          ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
+          ctx.moveTo(8, -18); ctx.lineTo(8, 18);
+          ctx.moveTo(12, 0); ctx.lineTo(40, 0);
+          ctx.stroke();
+        }
       } else if (el.type === 'V') {
         ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -20); ctx.moveTo(0, 20); ctx.lineTo(0, 40); ctx.stroke();
         ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.stroke();
         ctx.fillText('+', 10, 4); ctx.fillText('-', -16, 4);
+      } else if (el.type === 'GND') {
+        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 0); ctx.moveTo(-16, 0); ctx.lineTo(16, 0); ctx.moveTo(-10, 8); ctx.lineTo(10, 8); ctx.moveTo(-5, 16); ctx.lineTo(5, 16); ctx.stroke();
       }
-
       ctx.rotate(-((el.rotation || 0) * Math.PI) / 180);
       ctx.fillText(el.name || el.type, 14, -14);
       ctx.restore();
