@@ -1,516 +1,736 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>電路圖辨識多版型 v7</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grid 電路圖辨識 → JSON</title>
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, "Microsoft JhengHei", sans-serif; background: #f3f4f6; color: #111827; }
-    .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    .desc { margin: 0 0 16px; color: #4b5563; line-height: 1.6; }
-    .status { padding: 10px 14px; border-radius: 10px; background: #e0f2fe; color: #075985; margin-bottom: 16px; font-size: 14px; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
-    .toolbar input[type="file"] { background: white; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; }
-    button { border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 700; }
-    .btn-primary { background: #2563eb; color: white; }
-    .btn-success { background: #16a34a; color: white; }
-    .layout { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; }
-    .card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
-    .canvas-wrap { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    .panel-title { margin: 0 0 10px; font-size: 16px; }
-    canvas { width: 100%; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; }
-    textarea { width: 100%; min-height: 640px; resize: vertical; border: 1px solid #d1d5db; border-radius: 12px; padding: 12px; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
-    .small { font-size: 13px; color: #6b7280; line-height: 1.6; margin-top: 10px; }
-    @media (max-width: 1100px) {
-      .layout { grid-template-columns: 1fr; }
-      .canvas-wrap { grid-template-columns: 1fr; }
-      textarea { min-height: 360px; }
-    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;background:#f3f4f6;color:#111827}
+    .wrap{max-width:1600px;margin:0 auto;padding:18px}
+    h1{margin:0 0 8px;font-size:24px}
+    .hint{margin:0 0 14px;color:#4b5563;line-height:1.6}
+    .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0 14px}
+    input[type=file]{background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px}
+    button{border:0;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer}
+    .b1{background:#2563eb;color:#fff}
+    .b2{background:#16a34a;color:#fff}
+    .b3{background:#374151;color:#fff}
+    .status{background:#e0f2fe;color:#075985;padding:10px 12px;border-radius:10px;font-size:14px}
+    .grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
+    .card{background:#fff;border-radius:16px;padding:14px;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+    .cvgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    canvas{width:100%;border:1px solid #d1d5db;border-radius:12px;background:#fff}
+    textarea{width:100%;min-height:640px;border:1px solid #d1d5db;border-radius:12px;padding:12px;font-family:Consolas,monospace;font-size:13px;line-height:1.55;resize:vertical}
+    .small{margin-top:10px;color:#6b7280;font-size:13px;line-height:1.6}
+    @media (max-width:1100px){.grid{grid-template-columns:1fr}.cvgrid{grid-template-columns:1fr}textarea{min-height:360px}}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>電路圖辨識多版型 v7</h1>
-    <p class="desc">自動判斷常見固定版型，並輸出穩定 JSON。支援：單回路 RL、串並聯 RLC、雙支路並聯 RC。</p>
-    <div id="status" class="status">OpenCV.js 載入中…</div>
+<div class="wrap">
+  <h1>Grid 電路圖辨識 → JSON</h1>
+  <p class="hint">
+    這版是「切格子 + 陣列座標」：先把線/接點/元件位置做穩，再跑數值辨識。輸出會自動複製 JSON。
+  </p>
 
-    <div class="toolbar">
-      <input type="file" id="imageInput" accept="image/*" />
-      <button class="btn-primary" id="processBtn" disabled>開始辨識</button>
-      <button class="btn-success" id="downloadBtn">下載 JSON</button>
-    </div>
+  <div class="status" id="status">載入中…</div>
 
-    <div class="layout">
-      <div class="card">
-        <div class="canvas-wrap">
-          <div>
-            <h3 class="panel-title">原始圖片</h3>
-            <canvas id="srcCanvas" width="820" height="560"></canvas>
-          </div>
-          <div>
-            <h3 class="panel-title">處理結果 / 標記</h3>
-            <canvas id="dstCanvas" width="820" height="560"></canvas>
-          </div>
-          <div>
-            <h3 class="panel-title">JSON 預覽圖</h3>
-            <canvas id="previewCanvas" width="820" height="560"></canvas>
-          </div>
-        </div>
-        <div class="small">內建版型判斷：<br>① 單回路：V + R + L<br>② 上方主幹 + 中間支路 + 右支路：V + R + L + C + R<br>③ 上方主幹 + 中間支路電阻 + 右支路電阻電容：V + R + R + C + GND</div>
-      </div>
-      <div class="card">
-        <h3 class="panel-title">輸出 JSON</h3>
-        <textarea id="output"></textarea>
-      </div>
-    </div>
+  <div class="bar">
+    <input id="file" type="file" accept="image/*" />
+    <label style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:8px 10px">
+      <span style="font-weight:800;color:#374151">格子大小</span>
+      <input id="cell" type="number" value="20" min="10" max="60" style="width:84px;padding:6px;border:1px solid #d1d5db;border-radius:8px">
+      <span style="color:#6b7280;font-size:12px">px</span>
+    </label>
+
+    <button class="b1" id="run" disabled>開始辨識</button>
+    <button class="b2" id="download">下載 JSON</button>
+    <button class="b3" id="toggleDebug">切換 Debug</button>
   </div>
 
-  <script>
-    window.Module = {
-      onRuntimeInitialized() {
-        window.cvReady = true;
-        setStatus('OpenCV.js 已載入，可以開始辨識');
-        document.getElementById('processBtn').disabled = false;
+  <div class="grid">
+    <div class="card">
+      <div class="cvgrid">
+        <div>
+          <div style="font-weight:800;margin:0 0 8px">原始圖片</div>
+          <canvas id="src" width="900" height="560"></canvas>
+        </div>
+        <div>
+          <div style="font-weight:800;margin:0 0 8px">Grid / 線方向 / 元件框</div>
+          <canvas id="mid" width="900" height="560"></canvas>
+        </div>
+        <div>
+          <div style="font-weight:800;margin:0 0 8px">JSON 預覽圖</div>
+          <canvas id="preview" width="900" height="560"></canvas>
+        </div>
+      </div>
+      <div class="small">
+        規則：先判線，再找元件 cluster，再追線生成 wires。<br>
+        值：先用 OCR (Tesseract) + 後處理（<b>-j → C</b>、<b>j → L</b>）。TFJS 多模型接口已預留（你之後丟 model.json 就能加進 ensemble）。
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:800;margin:0 0 8px">輸出 JSON</div>
+      <textarea id="out"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- OCR -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- TFJS（可選，多模型用） -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+  const fileEl = $("file");
+  const runEl = $("run");
+  const dlEl = $("download");
+  const toggleDebugEl = $("toggleDebug");
+  const cellEl = $("cell");
+  const outEl = $("out");
+
+  const srcC = $("src"), midC = $("mid"), prevC = $("preview");
+  const srcCtx = srcC.getContext("2d");
+  const midCtx = midC.getContext("2d");
+  const prevCtx = prevC.getContext("2d");
+
+  let img = null;
+  let debug = true;
+  let lastJson = null;
+
+  // ====== 基本工具 ======
+  const snap = (v, cell) => Math.round(v / cell) * cell;
+  const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 10);
+
+  function setStatus(s){ statusEl.textContent = s; }
+  function clearCanvas(ctx, c){ ctx.clearRect(0,0,c.width,c.height); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height); }
+  function fitDraw(image, ctx, canvas){
+    clearCanvas(ctx, canvas);
+    const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+    const w = image.width * scale, h = image.height * scale;
+    const x = (canvas.width - w)/2, y = (canvas.height - h)/2;
+    ctx.drawImage(image, x, y, w, h);
+    return {x,y,w,h,scale};
+  }
+
+  async function copyJson(obj){
+    const text = JSON.stringify(obj, null, 2);
+    try{
+      if(navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(text);
+        return true;
       }
-    };
-  </script>
-  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position="fixed"; ta.style.left="-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
+    }catch{ return false; }
+  }
 
-  <script>
-    const GRID = 20;
-    const FREQ_HZ = 60;
-    const statusEl = document.getElementById('status');
-    const imageInput = document.getElementById('imageInput');
-    const processBtn = document.getElementById('processBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const outputEl = document.getElementById('output');
-    const srcCanvas = document.getElementById('srcCanvas');
-    const dstCanvas = document.getElementById('dstCanvas');
-    const previewCanvas = document.getElementById('previewCanvas');
-    const srcCtx = srcCanvas.getContext('2d');
-    const dstCtx = dstCanvas.getContext('2d');
-    const previewCtx = previewCanvas.getContext('2d');
+  function downloadJson(obj, name="circuit.json"){
+    const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
-    let loadedImage = null;
-    let lastResult = null;
+  // ====== 影像 → Grid ======
+  function buildGridFromCanvas(canvas, cellSize){
+    const ctx = canvas.getContext("2d");
+    const {width, height} = canvas;
+    const cols = Math.floor(width / cellSize);
+    const rows = Math.floor(height / cellSize);
+    const imgData = ctx.getImageData(0,0,width,height).data;
 
-    function setStatus(text) { statusEl.textContent = text; }
-    function snap(v) { return Math.round(v / GRID) * GRID; }
-    function uid(prefix) { return prefix + '_' + Math.random().toString(36).slice(2, 10); }
+    // cell object
+    const grid = Array.from({length: rows}, (_,gy)=>Array.from({length: cols}, (_,gx)=>({
+      gx, gy,
+      kind:"empty", // empty | wire | junction | symbol
+      black:0,
+      wire:{up:false,right:false,down:false,left:false},
+      visited:false,
+      symId:null
+    })));
 
-    function clearCanvas(ctx, canvas) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // 快速取像素
+    const idx = (x,y)=> (y*width + x)*4;
+    function lumAt(x,y){
+      const i = idx(x,y);
+      const r=imgData[i], g=imgData[i+1], b=imgData[i+2];
+      return (0.299*r + 0.587*g + 0.114*b);
+    }
+    function isBlack(x,y,thr=160){ return lumAt(x,y) < thr; }
+
+    // 先算每格黑像素比例 + 線強度（用中線抽樣）
+    for(let gy=0; gy<rows; gy++){
+      for(let gx=0; gx<cols; gx++){
+        const x0 = gx*cellSize, y0 = gy*cellSize;
+        let blackCnt=0, total=0;
+
+        // 粗略抽樣（每 2px 一點）
+        const step = Math.max(2, Math.floor(cellSize/10));
+        for(let y=y0; y<y0+cellSize; y+=step){
+          for(let x=x0; x<x0+cellSize; x+=step){
+            total++;
+            if(isBlack(x,y)) blackCnt++;
+          }
+        }
+        const blackRatio = blackCnt / Math.max(total,1);
+        grid[gy][gx].black = blackRatio;
+
+        // 中線方向抽樣：判斷此格是否有水平/垂直線
+        const midY = y0 + (cellSize>>1);
+        const midX = x0 + (cellSize>>1);
+
+        let hCnt=0, vCnt=0;
+        for(let x=x0+2; x<x0+cellSize-2; x+=2){
+          if(isBlack(x, midY)) hCnt++;
+        }
+        for(let y=y0+2; y<y0+cellSize-2; y+=2){
+          if(isBlack(midX, y)) vCnt++;
+        }
+        const hScore = hCnt / Math.max((cellSize/2),1);
+        const vScore = vCnt / Math.max((cellSize/2),1);
+
+        // 初步判線
+        const isWire = (blackRatio > 0.06 && blackRatio < 0.55) && (hScore > 0.35 || vScore > 0.35);
+        if(isWire) grid[gy][gx].kind = "wire";
+      }
     }
 
-    function fitAndDrawImage(img, ctx, canvas) {
-      clearCanvas(ctx, canvas);
-      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (canvas.width - w) / 2;
-      const y = (canvas.height - h) / 2;
-      ctx.drawImage(img, x, y, w, h);
+    // 線方向：看鄰格是否也有線，並且本格的 h/v score 足夠（避免亂接）
+    for(let gy=0; gy<rows; gy++){
+      for(let gx=0; gx<cols; gx++){
+        const c = grid[gy][gx];
+        if(c.kind !== "wire") continue;
+
+        const up = gy>0 ? grid[gy-1][gx] : null;
+        const dn = gy<rows-1 ? grid[gy+1][gx] : null;
+        const lf = gx>0 ? grid[gy][gx-1] : null;
+        const rt = gx<cols-1 ? grid[gy][gx+1] : null;
+
+        c.wire.up = !!(up && (up.kind==="wire" || up.kind==="junction"));
+        c.wire.down = !!(dn && (dn.kind==="wire" || dn.kind==="junction"));
+        c.wire.left = !!(lf && (lf.kind==="wire" || lf.kind==="junction"));
+        c.wire.right = !!(rt && (rt.kind==="wire" || rt.kind==="junction"));
+      }
     }
 
-    function loadImageToCanvas(file) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          loadedImage = img;
-          fitAndDrawImage(img, srcCtx, srcCanvas);
-          fitAndDrawImage(img, dstCtx, dstCanvas);
-          resolve(img);
-        };
-        img.onerror = reject;
-        img.src = URL.createObjectURL(file);
+    // junction：四向或三向連接視為 junction
+    for(let gy=0; gy<rows; gy++){
+      for(let gx=0; gx<cols; gx++){
+        const c = grid[gy][gx];
+        if(c.kind !== "wire") continue;
+        const deg = (c.wire.up?1:0)+(c.wire.right?1:0)+(c.wire.down?1:0)+(c.wire.left?1:0);
+        if(deg >= 3) c.kind = "junction";
+      }
+    }
+
+    return {grid, rows, cols, cellSize};
+  }
+
+  // ====== 找元件：把「非 wire/junction 且黑像素高」的格子做 cluster ======
+  function detectSymbolClusters(gridPack){
+    const {grid, rows, cols} = gridPack;
+    // 先把疑似元件格標成 symbol candidate
+    for(let y=0; y<rows; y++){
+      for(let x=0; x<cols; x++){
+        const c = grid[y][x];
+        if(c.kind==="wire" || c.kind==="junction") continue;
+        // 黑像素太少 = 空；太多也可能是字或實心，但教材圖多半適中
+        if(c.black > 0.12) c.kind = "symbol";
+      }
+    }
+
+    const clusters = [];
+    const visited = new Set();
+    const key = (x,y)=>`${x},${y}`;
+
+    function bfs(sx,sy){
+      const q=[[sx,sy]];
+      visited.add(key(sx,sy));
+      const cells=[];
+      let minX=sx,maxX=sx,minY=sy,maxY=sy;
+      while(q.length){
+        const [x,y]=q.shift();
+        cells.push({x,y});
+        minX=Math.min(minX,x); maxX=Math.max(maxX,x);
+        minY=Math.min(minY,y); maxY=Math.max(maxY,y);
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const nx=x+dx, ny=y+dy;
+          if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+          const k=key(nx,ny);
+          if(visited.has(k)) continue;
+          if(grid[ny][nx].kind!=="symbol") continue;
+          visited.add(k);
+          q.push([nx,ny]);
+        }
+      }
+      return {cells, minX,maxX,minY,maxY};
+    }
+
+    for(let y=0; y<rows; y++){
+      for(let x=0; x<cols; x++){
+        const c=grid[y][x];
+        if(c.kind!=="symbol") continue;
+        const k=key(x,y);
+        if(visited.has(k)) continue;
+        const cl=bfs(x,y);
+        // 過小 cluster 多半是雜訊/字，丟掉
+        if(cl.cells.length < 3) continue;
+        clusters.push(cl);
+      }
+    }
+    return clusters;
+  }
+
+  // ====== 元件分類（簡單啟發式 + 多模型接口）=====
+  function guessSymbolType(cluster, gridPack){
+    // 啟發式：看 cluster 的 bbox 形狀 + 周邊是否接線（判旋轉）
+    const {minX,maxX,minY,maxY,cells} = cluster;
+    const w = maxX-minX+1;
+    const h = maxY-minY+1;
+
+    // 粗判：長條 = R/L/C；接地通常在底部且像多橫線（這裡先用位置假設，不夠時靠 OCR/模型）
+    // 你後面會加入 tfjs 模型，所以這裡先給穩定的 fallback 類別：
+    // - 高而窄：垂直元件（多半 R 或 L 或 C）
+    // - 寬而扁：水平元件（多半 R 或 C）
+    // - 接近正方：可能 V（圓形）或 junction blob
+    if (Math.abs(w-h) <= 1 && w >= 2 && h >= 2) return {type:"V", rot:90, conf:0.45}; // 很粗
+    if (h >= w+2) return {type:"R", rot:90, conf:0.40};
+    if (w >= h+2) return {type:"R", rot:0, conf:0.40};
+    return {type:"R", rot:90, conf:0.25};
+  }
+
+  // ====== 從格子 cluster 生成 element（先定位，value 後面補）=====
+  function clusterToElement(cluster, cls, gridPack){
+    const {cellSize} = gridPack;
+    const cx = snap(((cluster.minX + cluster.maxX + 1)/2) * cellSize, cellSize);
+    const cy = snap(((cluster.minY + cluster.maxY + 1)/2) * cellSize, cellSize);
+    const type = cls.type;
+    const rotation = cls.rot;
+
+    const el = { id: uid(type.toLowerCase()), type, name: type, x: cx, y: cy, rotation, value: "" };
+
+    // 端點估算：用 bbox 長邊方向
+    const half = 4 * cellSize;
+    if(type === "GND"){
+      el.p = {x: cx, y: cy - cellSize};
+      return el;
+    }
+    if(rotation === 0 || rotation === 180){
+      el.a = {x: cx - half, y: cy};
+      el.b = {x: cx + half, y: cy};
+    }else{
+      el.a = {x: cx, y: cy - half};
+      el.b = {x: cx, y: cy + half};
+    }
+    return el;
+  }
+
+  // ====== 線追蹤：把 wire/junction 格子變成 points ======
+  function traceWires(gridPack){
+    const {grid, rows, cols, cellSize} = gridPack;
+    const visited = new Set();
+    const key = (x,y)=>`${x},${y}`;
+    const pointsOf = (x,y)=>({x: snap(x*cellSize + cellSize/2, cellSize), y: snap(y*cellSize + cellSize/2, cellSize)});
+
+    function neighbors(x,y){
+      const c = grid[y][x];
+      const out=[];
+      if(c.wire.up && y>0) out.push([x,y-1]);
+      if(c.wire.down && y<rows-1) out.push([x,y+1]);
+      if(c.wire.left && x>0) out.push([x-1,y]);
+      if(c.wire.right && x<cols-1) out.push([x+1,y]);
+      return out.filter(([nx,ny]) => {
+        const k=key(nx,ny);
+        const cc=grid[ny][nx];
+        return (cc.kind==="wire"||cc.kind==="junction") && !visited.has(k);
       });
     }
 
-    imageInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        await loadImageToCanvas(file);
-        setStatus('圖片已載入，請按「開始辨識」');
-      } catch (err) {
-        console.error(err);
-        setStatus('圖片載入失敗');
+    // 簡化 points：去掉同一直線上的中間點
+    function simplify(pts){
+      if(pts.length<=2) return pts;
+      const out=[pts[0]];
+      for(let i=1;i<pts.length-1;i++){
+        const a=out[out.length-1], b=pts[i], c=pts[i+1];
+        const collinear = (a.x===b.x && b.x===c.x) || (a.y===b.y && b.y===c.y);
+        if(!collinear) out.push(b);
       }
+      out.push(pts[pts.length-1]);
+      // 去掉重複
+      const out2=[];
+      for(const p of out){
+        if(!out2.length) out2.push(p);
+        else{
+          const q=out2[out2.length-1];
+          if(q.x!==p.x || q.y!==p.y) out2.push(p);
+        }
+      }
+      return out2;
+    }
+
+    const wires=[];
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const c=grid[y][x];
+        if(!(c.kind==="wire"||c.kind==="junction")) continue;
+        const k=key(x,y);
+        if(visited.has(k)) continue;
+
+        // 從這格開始走一條路（DFS-like）
+        const stack=[[x,y]];
+        const pts=[];
+        while(stack.length){
+          const [cx,cy]=stack.pop();
+          const ck=key(cx,cy);
+          if(visited.has(ck)) continue;
+          visited.add(ck);
+          pts.push(pointsOf(cx,cy));
+
+          const nbs = neighbors(cx,cy);
+          // 多分支：全塞進 stack，最後 simplify 會把轉折留下
+          for(const nb of nbs) stack.push(nb);
+        }
+
+        const simp = simplify(pts);
+        if(simp.length>=2){
+          wires.push({id: uid("w"), points: simp});
+        }
+      }
+    }
+    return wires;
+  }
+
+  // ====== 值辨識（多模型）=====
+  function normalizeValueAndType(type, raw){
+    const t = (raw||"").replace(/\s+/g,"").toLowerCase();
+
+    // 你要的規則：-j => C；j/+j => L
+    let newType = type;
+    if(t.includes("-j")) newType = "C";
+    else if(t.includes("j")) newType = "L";
+
+    // 清掉奇怪字
+    let val = (raw||"").trim();
+    val = val.replace(/ohm/gi,"Ω").replace(/omega/gi,"Ω");
+
+    return {type:newType, value:val};
+  }
+
+  function cropAround(canvas, cx, cy, w, h){
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d");
+    const x = Math.max(0, Math.floor(cx - w/2));
+    const y = Math.max(0, Math.floor(cy - h/2));
+    ctx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+    return c;
+  }
+
+  async function ocrWithTesseract(cropCanvas){
+    const {data:{text}} = await Tesseract.recognize(cropCanvas, "eng", {
+      tessedit_char_whitelist: "0123456789jJ-+∠°ΩVv.()",
     });
+    return (text||"").replace(/\s+/g," ").trim().slice(0, 40);
+  }
 
-    processBtn.addEventListener('click', async () => {
-      if (!window.cvReady) return alert('OpenCV.js 尚未載入完成');
-      if (!loadedImage) return alert('請先上傳圖片');
-      try {
-        setStatus('辨識中…');
-        const result = processCircuitImage();
-        lastResult = result;
-        outputEl.value = JSON.stringify(result, null, 2);
-        drawJsonPreview(result);
-        await copyJsonToClipboard(result);
-        setStatus('辨識完成，JSON 已自動複製');
-      } catch (err) {
-        console.error(err);
-        setStatus('辨識失敗：' + err.message);
+  // 你之後如果有 tfjs 模型，丟到這個清單就能自動 ensemble
+  const TF_MODELS = [
+    // 範例（你之後上傳到 /models/value1/model.json 之類）
+    // "/models/value1/model.json",
+    // "/models/value2/model.json",
+  ];
+  let tfLoaded = false;
+  let tfModels = [];
+
+  async function loadTfModelsIfAny(){
+    if(tfLoaded) return;
+    tfLoaded = true;
+    tfModels = [];
+    for(const url of TF_MODELS){
+      try{
+        const m = await tf.loadLayersModel(url);
+        tfModels.push(m);
+      }catch(e){
+        // 不擋流程
       }
-    });
+    }
+  }
 
-    downloadBtn.addEventListener('click', () => {
-      if (!lastResult) return alert('目前沒有結果');
-      exportJsonFile(lastResult, 'circuit.json');
-    });
+  // 範例接口：你之後把模型輸出改成字元分類/CTC 解碼就能在這裡做投票
+  async function tfEnsemblePredict(_cropCanvas){
+    await loadTfModelsIfAny();
+    if(!tfModels.length) return "";
+    // 目前先保留空字串（不影響），你後面再把模型輸出接上
+    return "";
+  }
 
-    function processCircuitImage() {
-      const src = cv.imread(srcCanvas);
-      const gray = new cv.Mat();
-      const binary = new cv.Mat();
-      const clean = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-      cv.threshold(gray, binary, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
-      removeTextLikeContours(binary, clean);
-      cv.cvtColor(clean, src, cv.COLOR_GRAY2RGBA);
-      cv.imshow(dstCanvas, src);
+  async function recognizeValueForElement(el){
+    // 依元件類型決定取值位置（先用近旁）
+    // 這裡採「安全範圍」：取元件中心右側/左側的小框，避免吃到線
+    const boxW = 180, boxH = 90;
+    let cx = el.x, cy = el.y;
 
-      const metrics = extractMetrics(clean);
-      const mode = decideTopology(metrics);
-      const result = buildJsonByMode(mode, metrics);
-      drawDetectionOverlay(result);
+    if(el.type==="V"){ cx = el.x - 120; cy = el.y; }
+    else if(el.type==="R"){ cx = el.x + 120; cy = el.y; }
+    else if(el.type==="L" || el.type==="C"){ cx = el.x + 120; cy = el.y; }
 
-      src.delete(); gray.delete(); binary.delete(); clean.delete();
-      return result;
+    const crop = cropAround(srcC, cx, cy, boxW, boxH);
+
+    // 多模型：先 TF ensemble（若有），再 OCR fallback
+    const tfText = await tfEnsemblePredict(crop);
+    const ocrText = tfText || await ocrWithTesseract(crop);
+    return ocrText;
+  }
+
+  // ====== JSON 組裝 ======
+  function buildJson(cellSize, elements, wires){
+    // 元件命名（同類遞增）
+    const count = {V:0,R:0,L:0,C:0,GND:0};
+    for(const el of elements){
+      if(el.type==="GND"){ el.name="GND"; continue; }
+      count[el.type]=(count[el.type]||0)+1;
+      el.name = el.type + count[el.type];
     }
 
-    function removeTextLikeContours(srcBinary, outBinary) {
-      srcBinary.copyTo(outBinary);
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-      cv.findContours(srcBinary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const rect = cv.boundingRect(cnt);
-        const area = cv.contourArea(cnt);
-        const w = rect.width, h = rect.height;
-        const aspect = w / Math.max(h, 1);
-        const fill = area / Math.max(w * h, 1);
-        const textLike = (
-          (w >= 8 && w <= 90 && h >= 6 && h <= 22 && aspect >= 1.7) ||
-          (w >= 6 && w <= 18 && h >= 6 && h <= 24 && fill > 0.08 && fill < 0.72) ||
-          (w <= 14 && h <= 14)
-        );
-        if (textLike) {
-          const p = 2;
-          const x = Math.max(0, rect.x - p), y = Math.max(0, rect.y - p);
-          const ww = Math.min(outBinary.cols - x, rect.width + p * 2);
-          const hh = Math.min(outBinary.rows - y, rect.height + p * 2);
-          const roi = outBinary.roi(new cv.Rect(x, y, ww, hh));
-          roi.setTo(new cv.Scalar(0));
-          roi.delete();
+    return {
+      version: 2,
+      grid: cellSize,
+      freqHz: 60,
+      elements,
+      wires,
+      junctions: []
+    };
+  }
+
+  // ====== 視覺化 ======
+  function drawDebug(gridPack, clusters, elements, wires){
+    clearCanvas(midCtx, midC);
+    if(img) fitDraw(img, midCtx, midC);
+
+    if(!debug) return;
+
+    const {rows, cols, cellSize, grid} = gridPack;
+
+    // grid 線
+    midCtx.globalAlpha = 0.5;
+    midCtx.strokeStyle = "#e5e7eb";
+    for(let x=0;x<=cols*cellSize;x+=cellSize){
+      midCtx.beginPath(); midCtx.moveTo(x,0); midCtx.lineTo(x,rows*cellSize); midCtx.stroke();
+    }
+    for(let y=0;y<=rows*cellSize;y+=cellSize){
+      midCtx.beginPath(); midCtx.moveTo(0,y); midCtx.lineTo(cols*cellSize,y); midCtx.stroke();
+    }
+    midCtx.globalAlpha = 1;
+
+    // wire / junction
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const c=grid[y][x];
+        if(c.kind==="wire"){
+          midCtx.fillStyle="rgba(37,99,235,0.22)";
+          midCtx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
         }
-        cnt.delete();
-      }
-      contours.delete();
-      hierarchy.delete();
-    }
-
-    function extractMetrics(binaryMat) {
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-      const circles = [];
-      const horiz = [];
-      const vert = [];
-      const grounds = [];
-
-      cv.findContours(binaryMat, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const rect = cv.boundingRect(cnt);
-        const area = cv.contourArea(cnt);
-        const w = rect.width, h = rect.height;
-        const cx = snap(rect.x + w / 2);
-        const cy = snap(rect.y + h / 2);
-        const aspect = w / Math.max(h, 1);
-        const fill = area / Math.max(w * h, 1);
-
-        if (w >= 24 && h >= 24 && aspect > 0.75 && aspect < 1.25 && fill > 0.25 && fill < 0.92) {
-          circles.push({ x: cx, y: cy });
-        } else if (w >= 22 && w <= 90 && h >= 8 && h <= 32) {
-          horiz.push({ x: cx, y: cy, w, h, fill });
-        } else if (h >= 30 && h <= 150 && w >= 10 && w <= 40) {
-          vert.push({ x: cx, y: cy, w, h, fill });
-        } else if (w >= 16 && w <= 60 && h >= 10 && h <= 26 && cy > srcCanvas.height * 0.55) {
-          grounds.push({ x: cx, y: cy });
+        if(c.kind==="junction"){
+          midCtx.fillStyle="rgba(16,185,129,0.28)";
+          midCtx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
         }
-        cnt.delete();
-      }
-      contours.delete();
-      hierarchy.delete();
-
-      circles.sort((a, b) => a.x - b.x);
-      horiz.sort((a, b) => a.x - b.x || a.y - b.y);
-      vert.sort((a, b) => a.x - b.x || a.y - b.y);
-
-      return {
-        circles,
-        horiz,
-        vert,
-        grounds,
-        width: srcCanvas.width,
-        height: srcCanvas.height
-      };
-    }
-
-    function decideTopology(m) {
-      const source = m.circles[0] || { x: 160, y: 280 };
-      const rightVerts = m.vert.filter(v => v.x > source.x + 80);
-      const horizNearTop = m.horiz.filter(h => h.y < m.height * 0.45);
-      const groundCount = m.grounds.length;
-
-      if (rightVerts.length <= 2 && horizNearTop.length <= 1) {
-        return 'single_rl';
-      }
-
-      if (groundCount >= 1 && rightVerts.length >= 2 && horizNearTop.length >= 1) {
-        return 'parallel_rc';
-      }
-
-      return 'series_shunt_rlc';
-    }
-
-    function buildJsonByMode(mode, m) {
-      if (mode === 'single_rl') return buildSingleRL(m);
-      if (mode === 'parallel_rc') return buildParallelRC(m);
-      return buildSeriesShuntRLC(m);
-    }
-
-    function buildSingleRL(m) {
-      const source = m.circles[0] || { x: 180, y: 280 };
-      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.y-b.y);
-      const xLeft = snap(source.x);
-      const xRight = snap((rightVerts[0]?.x) || 380);
-      const vY = snap(source.y);
-      const rY = snap((rightVerts[0]?.y) || 200);
-      const lY = snap((rightVerts[1]?.y) || 380);
-
-      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: xLeft, y: vY, a: { x: xLeft, y: snap(vY - 80) }, b: { x: xLeft, y: snap(vY + 80) }, rotation: 90, value: '' };
-      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: xRight, y: rY, a: { x: xRight, y: snap(rY - 80) }, b: { x: xRight, y: snap(rY + 80) }, rotation: 90, value: '' };
-      const L1 = { id: uid('l'), type: 'L', name: 'L1', x: xRight, y: lY, a: { x: xRight, y: snap(lY - 80) }, b: { x: xRight, y: snap(lY + 80) }, rotation: 90, value: '' };
-      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: xRight, y: snap(L1.b.y + 20), p: { x: xRight, y: L1.b.y } };
-
-      return {
-        version: 2,
-        grid: GRID,
-        junctions: [],
-        wires: [
-          { id: uid('w'), points: [{ x: R1.a.x, y: R1.a.y }, { x: V1.a.x, y: R1.a.y }, { x: V1.a.x, y: V1.a.y }] },
-          { id: uid('w'), points: [{ x: R1.b.x, y: R1.b.y }, { x: L1.a.x, y: L1.a.y }] },
-          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: V1.b.x, y: L1.b.y }, { x: V1.b.x, y: V1.b.y }] },
-          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: GND.p.x, y: GND.p.y }] }
-        ],
-        freqHz: FREQ_HZ,
-        elements: [GND, V1, R1, L1]
-      };
-    }
-
-    function buildSeriesShuntRLC(m) {
-      const source = m.circles[0] || { x: 140, y: 300 };
-      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.x-b.x||a.y-b.y);
-      const horizTop = m.horiz.filter(h => h.y < m.height * 0.45).sort((a,b)=>a.x-b.x);
-
-      const sourceX = snap(source.x);
-      const sourceY = snap(source.y);
-      const nodeAY = snap(Math.min(horizTop[0]?.y || 160, horizTop[horizTop.length-1]?.y || 160, (rightVerts[0]?.y || 300) - 120));
-      const nodeAX = snap((rightVerts[0]?.x) || 420);
-      const rightX = snap(Math.max((rightVerts[1]?.x) || (nodeAX + 220), nodeAX + 220));
-      const bottomY = snap(Math.max((rightVerts[0]?.y || 300) + 120, (rightVerts[1]?.y || 300) + 120, sourceY + 80));
-
-      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: sourceX, y: sourceY, a: { x: sourceX, y: snap(sourceY - 80) }, b: { x: sourceX, y: snap(sourceY + 80) }, rotation: 90, value: '' };
-      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: snap((sourceX + nodeAX)/2), y: nodeAY, a: { x: sourceX, y: nodeAY }, b: { x: nodeAX, y: nodeAY }, rotation: 0, value: '' };
-      const L1 = { id: uid('l'), type: 'L', name: 'L1', x: nodeAX, y: snap((nodeAY + bottomY)/2), a: { x: nodeAX, y: nodeAY }, b: { x: nodeAX, y: bottomY }, rotation: 90, value: '' };
-      const C1 = { id: uid('c'), type: 'C', name: 'C1', x: snap((nodeAX + rightX)/2), y: nodeAY, a: { x: nodeAX, y: nodeAY }, b: { x: rightX, y: nodeAY }, rotation: 0, value: '' };
-      const R2 = { id: uid('r'), type: 'R', name: 'R2', x: rightX, y: snap((nodeAY + bottomY)/2), a: { x: rightX, y: bottomY }, b: { x: rightX, y: nodeAY }, rotation: 90, value: '' };
-      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: nodeAX, y: snap(bottomY + 20), p: { x: nodeAX, y: bottomY } };
-
-      return {
-        version: 2,
-        grid: GRID,
-        junctions: [],
-        wires: [
-          { id: uid('w'), points: [{ x: V1.a.x, y: V1.a.y }, { x: V1.a.x, y: nodeAY }, { x: R1.a.x, y: R1.a.y }] },
-          { id: uid('w'), points: [{ x: R1.b.x, y: R1.b.y }, { x: C1.a.x, y: C1.a.y }] },
-          { id: uid('w'), points: [{ x: C1.b.x, y: C1.b.y }, { x: R2.b.x, y: R2.b.y }] },
-          { id: uid('w'), points: [{ x: L1.a.x, y: L1.a.y }, { x: nodeAX, y: nodeAY }] },
-          { id: uid('w'), points: [{ x: V1.b.x, y: V1.b.y }, { x: V1.b.x, y: bottomY }, { x: L1.b.x, y: L1.b.y }, { x: R2.a.x, y: R2.a.y }] },
-          { id: uid('w'), points: [{ x: L1.b.x, y: L1.b.y }, { x: GND.p.x, y: GND.p.y }] }
-        ],
-        freqHz: FREQ_HZ,
-        elements: [V1, R1, L1, C1, R2, GND]
-      };
-    }
-
-    function buildParallelRC(m) {
-      const source = m.circles[0] || { x: 160, y: 260 };
-      const rightVerts = m.vert.filter(v => v.x > source.x + 80).sort((a,b)=>a.x-b.x||a.y-b.y);
-      const grounds = m.grounds.sort((a,b)=>b.y-a.y);
-
-      const leftX = snap(source.x);
-      const topY = snap((source.y || 260) - 80);
-      const bottomY = snap(Math.max((grounds[0]?.y || 420), (source.y || 260) + 100));
-      const midX = snap((rightVerts[0]?.x) || 360);
-      const rightX = snap(Math.max((rightVerts[1]?.x) || 560, midX + 180));
-      const sourceY = snap((topY + bottomY)/2);
-
-      const V1 = { id: uid('v'), type: 'V', name: 'V1', x: leftX, y: sourceY, a: { x: leftX, y: topY }, b: { x: leftX, y: bottomY }, rotation: 90, value: '' };
-      const R1 = { id: uid('r'), type: 'R', name: 'R1', x: midX, y: snap((topY + bottomY)/2), a: { x: midX, y: topY }, b: { x: midX, y: bottomY }, rotation: 90, value: '' };
-      const R2 = { id: uid('r'), type: 'R', name: 'R2', x: rightX, y: snap((topY + bottomY)/2 - 80), a: { x: rightX, y: snap((topY + bottomY)/2) }, b: { x: rightX, y: topY }, rotation: 90, value: '' };
-      const C1 = { id: uid('c'), type: 'C', name: 'C1', x: rightX, y: snap((topY + bottomY)/2 + 80), a: { x: rightX, y: bottomY }, b: { x: rightX, y: snap((topY + bottomY)/2) }, rotation: 90, value: '' };
-      const GND = { id: uid('g'), type: 'GND', name: 'GND', x: midX, y: snap(bottomY + 20), p: { x: midX, y: bottomY } };
-
-      return {
-        version: 2,
-        grid: GRID,
-        junctions: [],
-        wires: [
-          { id: uid('w'), points: [{ x: leftX, y: topY }, { x: midX, y: topY }, { x: rightX, y: topY }] },
-          { id: uid('w'), points: [{ x: leftX, y: bottomY }, { x: midX, y: bottomY }, { x: rightX, y: bottomY }] },
-          { id: uid('w'), points: [{ x: midX, y: bottomY }, { x: GND.p.x, y: GND.p.y }] }
-        ],
-        freqHz: FREQ_HZ,
-        elements: [V1, R1, R2, C1, GND]
-      };
-    }
-
-    async function copyJsonToClipboard(data) {
-      const jsonText = JSON.stringify(data, null, 2);
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(jsonText);
-          return true;
-        }
-        const ta = document.createElement('textarea');
-        ta.value = jsonText;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return !!ok;
-      } catch {
-        return false;
       }
     }
 
-    function exportJsonFile(data, filename = 'circuit.json') {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+    // cluster bbox
+    midCtx.strokeStyle="#ef4444";
+    midCtx.lineWidth=2;
+    for(const cl of clusters){
+      midCtx.strokeRect(cl.minX*cellSize, cl.minY*cellSize, (cl.maxX-cl.minX+1)*cellSize, (cl.maxY-cl.minY+1)*cellSize);
     }
 
-    function drawDetectionOverlay(result) {
-      if (loadedImage) fitAndDrawImage(loadedImage, dstCtx, dstCanvas); else clearCanvas(dstCtx, dstCanvas);
-      dstCtx.strokeStyle = '#2563eb';
-      dstCtx.lineWidth = 2;
-      for (const wire of result.wires || []) {
-        dstCtx.beginPath();
-        dstCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) dstCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        dstCtx.stroke();
-      }
-      for (const el of result.elements || []) {
-        dstCtx.strokeStyle = '#dc2626';
-        dstCtx.strokeRect(el.x - 22, el.y - 22, 44, 44);
-        dstCtx.fillStyle = '#dc2626';
-        dstCtx.font = '14px Arial';
-        dstCtx.fillText(el.type + ':' + el.name, el.x + 8, el.y - 8);
-      }
+    // elements + wires
+    midCtx.strokeStyle="#2563eb"; midCtx.lineWidth=3;
+    for(const w of wires){
+      midCtx.beginPath();
+      midCtx.moveTo(w.points[0].x, w.points[0].y);
+      for(let i=1;i<w.points.length;i++) midCtx.lineTo(w.points[i].x, w.points[i].y);
+      midCtx.stroke();
+    }
+    for(const el of elements){
+      midCtx.strokeStyle="#111827";
+      midCtx.strokeRect(el.x-20, el.y-20, 40, 40);
+      midCtx.fillStyle="#111827";
+      midCtx.font="14px Arial";
+      midCtx.fillText(el.type, el.x+10, el.y-10);
+    }
+  }
+
+  function drawPreview(json){
+    clearCanvas(prevCtx, prevC);
+
+    const cellSize = json.grid;
+    // grid
+    prevCtx.strokeStyle="#e5e7eb"; prevCtx.lineWidth=1;
+    for(let x=0;x<=prevC.width;x+=cellSize){ prevCtx.beginPath(); prevCtx.moveTo(x,0); prevCtx.lineTo(x,prevC.height); prevCtx.stroke(); }
+    for(let y=0;y<=prevC.height;y+=cellSize){ prevCtx.beginPath(); prevCtx.moveTo(0,y); prevCtx.lineTo(prevC.width,y); prevCtx.stroke(); }
+
+    // wires
+    prevCtx.strokeStyle="#2563eb"; prevCtx.lineWidth=3;
+    for(const w of json.wires||[]){
+      prevCtx.beginPath();
+      prevCtx.moveTo(w.points[0].x, w.points[0].y);
+      for(let i=1;i<w.points.length;i++) prevCtx.lineTo(w.points[i].x, w.points[i].y);
+      prevCtx.stroke();
     }
 
-    function drawJsonPreview(result) {
-      clearCanvas(previewCtx, previewCanvas);
-      previewCtx.strokeStyle = '#e5e7eb';
-      previewCtx.lineWidth = 1;
-      for (let x = 0; x <= previewCanvas.width; x += GRID) { previewCtx.beginPath(); previewCtx.moveTo(x, 0); previewCtx.lineTo(x, previewCanvas.height); previewCtx.stroke(); }
-      for (let y = 0; y <= previewCanvas.height; y += GRID) { previewCtx.beginPath(); previewCtx.moveTo(0, y); previewCtx.lineTo(previewCanvas.width, y); previewCtx.stroke(); }
-      previewCtx.strokeStyle = '#2563eb';
-      previewCtx.lineWidth = 3;
-      for (const wire of result.wires || []) {
-        previewCtx.beginPath();
-        previewCtx.moveTo(wire.points[0].x, wire.points[0].y);
-        for (let i = 1; i < wire.points.length; i++) previewCtx.lineTo(wire.points[i].x, wire.points[i].y);
-        previewCtx.stroke();
+    // symbols (簡單畫)
+    for(const el of json.elements||[]){
+      drawSymbol(prevCtx, el);
+    }
+  }
+
+  function drawSymbol(ctx, el){
+    ctx.save();
+    ctx.translate(el.x, el.y);
+    ctx.rotate(((el.rotation||0) * Math.PI)/180);
+    ctx.strokeStyle="#111827"; ctx.fillStyle="#111827"; ctx.lineWidth=3;
+    ctx.font="14px Arial";
+
+    if(el.type==="R"){
+      if((el.rotation||0)%180===0){
+        ctx.beginPath(); ctx.moveTo(-40,0); ctx.lineTo(-25,0);
+        let x=-25, step=8, amp=10;
+        for(let i=0;i<6;i++){ ctx.lineTo(x+step, i%2===0?amp:-amp); x+=step; }
+        ctx.lineTo(25,0); ctx.lineTo(40,0); ctx.stroke();
+      }else{
+        ctx.beginPath(); ctx.moveTo(0,-40); ctx.lineTo(0,-25);
+        let y=-25, step=8, amp=10;
+        for(let i=0;i<6;i++){ ctx.lineTo(i%2===0?amp:-amp, y+step); y+=step; }
+        ctx.lineTo(0,25); ctx.lineTo(0,40); ctx.stroke();
       }
-      for (const el of result.elements || []) drawSymbol(previewCtx, el);
+    }else if(el.type==="L"){
+      ctx.beginPath(); ctx.moveTo(0,-40); ctx.lineTo(0,-22); ctx.stroke();
+      for(let i=0;i<4;i++){ ctx.beginPath(); ctx.arc(0, -14+i*10, 8, Math.PI/2, -Math.PI/2, true); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(0,22); ctx.lineTo(0,40); ctx.stroke();
+    }else if(el.type==="C"){
+      if((el.rotation||0)%180===0){
+        ctx.beginPath();
+        ctx.moveTo(-40,0); ctx.lineTo(-12,0);
+        ctx.moveTo(-8,-18); ctx.lineTo(-8,18);
+        ctx.moveTo(8,-18); ctx.lineTo(8,18);
+        ctx.moveTo(12,0); ctx.lineTo(40,0);
+        ctx.stroke();
+      }else{
+        ctx.beginPath();
+        ctx.moveTo(0,-40); ctx.lineTo(0,-12);
+        ctx.moveTo(-18,-8); ctx.lineTo(18,-8);
+        ctx.moveTo(-18,8); ctx.lineTo(18,8);
+        ctx.moveTo(0,12); ctx.lineTo(0,40);
+        ctx.stroke();
+      }
+    }else if(el.type==="V"){
+      ctx.beginPath(); ctx.moveTo(0,-40); ctx.lineTo(0,-20); ctx.moveTo(0,20); ctx.lineTo(0,40); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
+      ctx.fillText("+", 10, 4); ctx.fillText("-", -16, 4);
+    }else if(el.type==="GND"){
+      ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(0,0);
+      ctx.moveTo(-16,0); ctx.lineTo(16,0);
+      ctx.moveTo(-10,8); ctx.lineTo(10,8);
+      ctx.moveTo(-5,16); ctx.lineTo(5,16);
+      ctx.stroke();
     }
 
-    function drawSymbol(ctx, el) {
-      ctx.save();
-      ctx.translate(el.x, el.y);
-      ctx.rotate(((el.rotation || 0) * Math.PI) / 180);
-      ctx.strokeStyle = '#111827';
-      ctx.fillStyle = '#111827';
-      ctx.lineWidth = 3;
-      ctx.font = '14px Arial';
+    ctx.rotate(-(((el.rotation||0) * Math.PI)/180));
+    ctx.fillText(el.name||el.type, 14, -14);
+    if(el.value){
+      ctx.fillStyle="#374151";
+      ctx.fillText(el.value, 14, 10);
+    }
+    ctx.restore();
+  }
 
-      if (el.type === 'R') {
-        if ((el.rotation || 0) === 0) {
-          ctx.beginPath(); ctx.moveTo(-40, 0); ctx.lineTo(-25, 0);
-          let x = -25; const step = 8; const amp = 10;
-          for (let i = 0; i < 6; i++) { ctx.lineTo(x + step, i % 2 === 0 ? amp : -amp); x += step; }
-          ctx.lineTo(25, 0); ctx.lineTo(40, 0); ctx.stroke();
-        } else {
-          ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -25);
-          let y = -25; const step = 8; const amp = 10;
-          for (let i = 0; i < 6; i++) { ctx.lineTo(i % 2 === 0 ? amp : -amp, y + step); y += step; }
-          ctx.lineTo(0, 25); ctx.lineTo(0, 40); ctx.stroke();
-        }
-      } else if (el.type === 'L') {
-        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -22); ctx.stroke();
-        for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, -14 + i * 10, 8, Math.PI / 2, -Math.PI / 2, true); ctx.stroke(); }
-        ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 40); ctx.stroke();
-      } else if (el.type === 'C') {
-        if ((el.rotation || 0) === 90) {
-          ctx.beginPath();
-          ctx.moveTo(0, -40); ctx.lineTo(0, -12);
-          ctx.moveTo(-18, -8); ctx.lineTo(18, -8);
-          ctx.moveTo(-18, 8); ctx.lineTo(18, 8);
-          ctx.moveTo(0, 12); ctx.lineTo(0, 40);
-          ctx.stroke();
-        } else {
-          ctx.beginPath();
-          ctx.moveTo(-40, 0); ctx.lineTo(-12, 0);
-          ctx.moveTo(-8, -18); ctx.lineTo(-8, 18);
-          ctx.moveTo(8, -18); ctx.lineTo(8, 18);
-          ctx.moveTo(12, 0); ctx.lineTo(40, 0);
-          ctx.stroke();
-        }
-      } else if (el.type === 'V') {
-        ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -20); ctx.moveTo(0, 20); ctx.lineTo(0, 40); ctx.stroke();
-        ctx.beginPath(); ctx.arc(0, 0, 20, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillText('+', 10, 4); ctx.fillText('-', -16, 4);
-      } else if (el.type === 'GND') {
-        ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(0, 0); ctx.moveTo(-16, 0); ctx.lineTo(16, 0); ctx.moveTo(-10, 8); ctx.lineTo(10, 8); ctx.moveTo(-5, 16); ctx.lineTo(5, 16); ctx.stroke();
-      }
-      ctx.rotate(-((el.rotation || 0) * Math.PI) / 180);
-      ctx.fillText(el.name || el.type, 14, -14);
-      ctx.restore();
+  // ====== 主流程 ======
+  async function run(){
+    const cellSize = parseInt(cellEl.value, 10) || 20;
+    if(!img) return;
+
+    setStatus("Grid 分析中…");
+    const gridPack = buildGridFromCanvas(srcC, cellSize);
+
+    setStatus("偵測元件 cluster…");
+    const clusters = detectSymbolClusters(gridPack);
+
+    setStatus("分類元件 + 生成 elements…");
+    const elements = [];
+    for(const cl of clusters){
+      const cls = guessSymbolType(cl, gridPack);
+      elements.push(clusterToElement(cl, cls, gridPack));
     }
 
-    outputEl.value = JSON.stringify({ version: 2, grid: 20, junctions: [], wires: [], freqHz: 60, elements: [] }, null, 2);
-    clearCanvas(srcCtx, srcCanvas);
-    clearCanvas(dstCtx, dstCanvas);
-    clearCanvas(previewCtx, previewCanvas);
-  </script>
+    setStatus("追蹤導線…");
+    const wires = traceWires(gridPack);
+
+    // 先組 JSON（位置與線先穩）
+    let json = buildJson(cellSize, elements, wires);
+
+    // 值辨識（多模型管線）
+    setStatus("辨識數值（OCR/多模型）…");
+    for(const el of json.elements){
+      if(el.type==="GND") continue;
+      const raw = await recognizeValueForElement(el);
+      const fixed = normalizeValueAndType(el.type, raw);
+      el.type = fixed.type;
+      el.value = fixed.value;
+    }
+
+    // 重新命名（因為 type 可能被 -j/j 修正）
+    json = buildJson(cellSize, json.elements, json.wires);
+
+    // 輸出
+    lastJson = json;
+    outEl.value = JSON.stringify(json, null, 2);
+    drawDebug(gridPack, clusters, json.elements, json.wires);
+    drawPreview(json);
+
+    await copyJson(json);
+    setStatus("完成：JSON 已自動複製（可下載）");
+  }
+
+  // ====== UI ======
+  toggleDebugEl.onclick = () => { debug = !debug; setStatus(debug ? "Debug ON" : "Debug OFF"); if(lastJson) drawPreview(lastJson); };
+  dlEl.onclick = () => { if(!lastJson) return alert("尚無結果"); downloadJson(lastJson); };
+  runEl.onclick = run;
+
+  fileEl.onchange = async (e) => {
+    const f = e.target.files?.[0];
+    if(!f) return;
+    img = new Image();
+    img.onload = () => {
+      fitDraw(img, srcCtx, srcC);
+      fitDraw(img, midCtx, midC);
+      clearCanvas(prevCtx, prevC);
+      outEl.value = "";
+      lastJson = null;
+      runEl.disabled = false;
+      setStatus("圖片已載入，按「開始辨識」");
+    };
+    img.onerror = () => setStatus("圖片載入失敗");
+    img.src = URL.createObjectURL(f);
+  };
+
+  // init
+  clearCanvas(srcCtx, srcC); clearCanvas(midCtx, midC); clearCanvas(prevCtx, prevC);
+  outEl.value = JSON.stringify({version:2,grid:20,freqHz:60,elements:[],wires:[],junctions:[]}, null, 2);
+  setStatus("就緒：上傳圖片開始");
+})();
+</script>
 </body>
 </html>
