@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Grid 電路圖辨識 → JSON</title>
+  <title>Grid 電路圖辨識 → JSON（四分割 + Junction 抑制 + Ensemble 接口）</title>
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:Arial,"Microsoft JhengHei",sans-serif;background:#f3f4f6;color:#111827}
@@ -30,7 +30,8 @@
 <div class="wrap">
   <h1>Grid 電路圖辨識 → JSON</h1>
   <p class="hint">
-    這版是「切格子 + 陣列座標」：先把線/接點/元件位置做穩，再跑數值辨識。輸出會自動複製 JSON。
+    這版重點：<b>把圖片切成四塊</b>（2×2）局部化處理，並加入 <b>Junction 抑制</b> 避免把接點誤判成電壓源。
+    多模型 TFJS 接口保留，沒模型也能跑（用 OCR）。
   </p>
 
   <div class="status" id="status">載入中…</div>
@@ -56,7 +57,7 @@
           <canvas id="src" width="900" height="560"></canvas>
         </div>
         <div>
-          <div style="font-weight:800;margin:0 0 8px">Grid / 線方向 / 元件框</div>
+          <div style="font-weight:800;margin:0 0 8px">Debug（Grid/線/接點/框）</div>
           <canvas id="mid" width="900" height="560"></canvas>
         </div>
         <div>
@@ -65,8 +66,8 @@
         </div>
       </div>
       <div class="small">
-        規則：先判線，再找元件 cluster，再追線生成 wires。<br>
-        值：先用 TF 多模型（若有）+ 後處理，再用 OCR (Tesseract) 補救（<b>-j → C</b>、<b>j → L</b>）。
+        流程：四分割 → 每塊做 Grid/線/接點 → 抑制 junction 旁小 cluster → 生成 elements/wires → 映射回原圖合併 → (可選) 值辨識。<br>
+        值：先 TF 多模型（若有）再 OCR（Tesseract）補救；後處理：<b>-j → C</b>、<b>j → L</b>。
       </div>
     </div>
 
@@ -107,7 +108,11 @@
   const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 10);
 
   function setStatus(s){ statusEl.textContent = s; }
-  function clearCanvas(ctx, c){ ctx.clearRect(0,0,c.width,c.height); ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height); }
+  function clearCanvas(ctx, c){
+    ctx.clearRect(0,0,c.width,c.height);
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,c.width,c.height);
+  }
   function fitDraw(image, ctx, canvas){
     clearCanvas(ctx, canvas);
     const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
@@ -144,38 +149,58 @@
   }
 
   // ============================================================
-  // =============== TF 多模型 Ensemble（新增） ==================
+  // =================== 四分割（2×2） ===========================
   // ============================================================
+  function splitCanvas4(srcCanvas){
+    const w = srcCanvas.width, h = srcCanvas.height;
+    const halfW = Math.floor(w/2), halfH = Math.floor(h/2);
+
+    const tiles = [];
+    const rects = [
+      {tx:0, ty:0, x:0,     y:0,     w:halfW,     h:halfH},      // TL
+      {tx:1, ty:0, x:halfW, y:0,     w:w-halfW,   h:halfH},      // TR
+      {tx:0, ty:1, x:0,     y:halfH, w:halfW,     h:h-halfH},    // BL
+      {tx:1, ty:1, x:halfW, y:halfH, w:w-halfW,   h:h-halfH},    // BR
+    ];
+
+    for(const r of rects){
+      const c = document.createElement("canvas");
+      c.width = r.w; c.height = r.h;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0,0,c.width,c.height);
+      ctx.drawImage(srcCanvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+      tiles.push({canvas:c, ...r});
+    }
+    return tiles;
+  }
+
+  function offsetPoint(p, ox, oy){ return {x: p.x + ox, y: p.y + oy}; }
+  function offsetWire(wire, ox, oy){
+    return { id: wire.id, points: wire.points.map(p => offsetPoint(p, ox, oy)) };
+  }
+  function offsetElement(el, ox, oy){
+    const out = {...el};
+    out.x += ox; out.y += oy;
+    if(out.a) out.a = offsetPoint(out.a, ox, oy);
+    if(out.b) out.b = offsetPoint(out.b, ox, oy);
+    if(out.p) out.p = offsetPoint(out.p, ox, oy);
+    return out;
+  }
+
+  // ============================================================
+  // =================== TF 多模型（保留） ========================
+  // ============================================================
+  // 你要用就把模型路徑解除註解即可；沒模型也不會壞
   const TF_MODELS = [
-    // 你把模型放在 ./models/.../model.json 就能直接用
-    // value：辨識元件旁邊數值文字（-j/j/Ω/V…）
-    // type：分類元件 R/L/C/V/GND
+    // value：數值文字辨識（CTC）
+    // { name:"value_ctc_1", url:"./models/value_ctc_1/model.json", kind:"layers", task:"value", weight:1.0, inputSize:[64,192],
+    //   charset:"0123456789.+-jJkKmMuUnNpPfFΩVvHh", decoder:"ctc" },
 
-    // ===== value models =====
-    // {
-    //   name: "value_ctc_1",
-    //   url: "./models/value_ctc_1/model.json",
-    //   kind: "layers",     // layers | graph
-    //   task: "value",
-    //   weight: 1.0,
-    //   inputSize: [64, 192],
-    //   charset: "0123456789.+-jJkKmMuUnNpPfFΩVvHh",
-    //   decoder: "ctc"      // ctc | argmax_text
-    // },
-
-    // ===== type models =====
-    // {
-    //   name: "type_cls_1",
-    //   url: "./models/type_cls_1/model.json",
-    //   kind: "layers",
-    //   task: "type",
-    //   weight: 1.0,
-    //   inputSize: [96, 96],
-    //   classes: ["R","L","C","V","GND"],
-    //   decoder: "classmap"
-    // }
+    // type：元件類型分類（classes）
+    // { name:"type_cls_1", url:"./models/type_cls_1/model.json", kind:"layers", task:"type", weight:1.0, inputSize:[96,96],
+    //   classes:["R","L","C","V","GND"], decoder:"classmap" }
   ];
-
   let tfLoaded = false;
   let tfModels = [];
 
@@ -183,151 +208,103 @@
     if(tfLoaded) return;
     tfLoaded = true;
     tfModels = [];
-
     for(const cfg of TF_MODELS){
       try{
         let model = null;
-        if(cfg.kind === "graph"){
-          model = await tf.loadGraphModel(cfg.url);
-        }else{
-          model = await tf.loadLayersModel(cfg.url);
-        }
+        if(cfg.kind === "graph") model = await tf.loadGraphModel(cfg.url);
+        else model = await tf.loadLayersModel(cfg.url);
         tfModels.push({...cfg, model});
-        console.log("[TF] loaded:", cfg.name, cfg.kind, cfg.task);
+        console.log("[TF] loaded:", cfg.name);
       }catch(e){
         console.warn("[TF] load failed:", cfg.name, e);
       }
     }
-    console.log("[TF] total loaded =", tfModels.length);
   }
 
   function canvasToInputTensor(cropCanvas, inputH, inputW, gray=true){
     return tf.tidy(() => {
       let t = tf.browser.fromPixels(cropCanvas);
       t = tf.image.resizeBilinear(t, [inputH, inputW]);
-      if(gray){
-        t = tf.mean(t, 2).expandDims(2); // [H,W,1]
-      }
+      if(gray) t = tf.mean(t, 2).expandDims(2);
       t = t.toFloat().div(255.0);
-      t = tf.sub(1.0, t); // 反相：黑線更亮
-      t = t.expandDims(0); // [1,H,W,C]
+      t = tf.sub(1.0, t);
+      t = t.expandDims(0);
       return t;
     });
   }
-
   function softmax(arr){
     const m = Math.max(...arr);
     const exps = arr.map(v => Math.exp(v - m));
     const sum = exps.reduce((a,b)=>a+b,0) || 1;
-    return exps.map(v => v / sum);
+    return exps.map(v => v/sum);
   }
-
   function argmax(arr){
-    let idx = 0;
-    let best = arr[0] ?? -Infinity;
-    for(let i=1;i<arr.length;i++){
-      if(arr[i] > best){
-        best = arr[i];
-        idx = i;
-      }
-    }
+    let idx=0, best=arr[0] ?? -Infinity;
+    for(let i=1;i<arr.length;i++){ if(arr[i]>best){best=arr[i];idx=i;} }
     return idx;
   }
-
   function decodeClassMap(outputArray, classes=[]){
     if(!classes.length || !outputArray.length) return {text:"", conf:0};
     const probs = softmax(outputArray);
     const idx = argmax(probs);
     return { text: classes[idx] || "", conf: probs[idx] || 0 };
   }
-
   function decodeCTCFlat(flat, charset=""){
     if(!flat?.length || !charset) return {text:"", conf:0};
-    const numClasses = charset.length + 1; // last = blank
+    const numClasses = charset.length + 1;
     const T = Math.floor(flat.length / numClasses);
     if(T <= 0) return {text:"", conf:0};
 
-    let text = "";
-    let confSum = 0;
-    let confCnt = 0;
-    let prevIdx = -1;
-
-    for(let t=0; t<T; t++){
+    let text="", confSum=0, confCnt=0, prev=-1;
+    for(let t=0;t<T;t++){
       const row = flat.slice(t*numClasses, (t+1)*numClasses);
       const probs = softmax(row);
       const idx = argmax(probs);
-
-      if(idx === charset.length){
-        prevIdx = idx;
-        continue;
-      }
-      if(idx !== prevIdx){
+      if(idx===charset.length){ prev=idx; continue; }
+      if(idx!==prev){
         text += charset[idx] || "";
         confSum += probs[idx] || 0;
         confCnt++;
       }
-      prevIdx = idx;
+      prev=idx;
     }
-
-    return { text: text.trim(), conf: confCnt ? (confSum / confCnt) : 0 };
+    return { text:text.trim(), conf: confCnt?(confSum/confCnt):0 };
   }
-
-  function decodeArgmaxText(outputArray, charset=""){
-    if(!outputArray?.length || !charset) return {text:"", conf:0};
-    const probs = softmax(outputArray);
-    const idx = argmax(probs);
-    return { text: charset[idx] || "", conf: probs[idx] || 0 };
-  }
-
   function cleanPredictedValue(text){
-    let s = (text || "").replace(/\s+/g, "");
-    s = s.replace(/O/g, "0").replace(/o/g, "0");
-    s = s.replace(/—/g, "-").replace(/﹣/g, "-");
-    s = s.replace(/，/g, ".").replace(/,/g, ".");
-    s = s.replace(/ohm/gi, "Ω").replace(/omega/gi, "Ω");
-    s = s.replace(/[^0-9A-Za-z.+\-Ω]/g, "");
+    let s=(text||"").replace(/\s+/g,"");
+    s=s.replace(/O/g,"0").replace(/o/g,"0");
+    s=s.replace(/—/g,"-").replace(/﹣/g,"-");
+    s=s.replace(/，/g,".").replace(/,/g,".");
+    s=s.replace(/ohm/gi,"Ω").replace(/omega/gi,"Ω");
+    s=s.replace(/[^0-9A-Za-z.+\-Ω]/g,"");
     return s;
   }
 
   async function tfEnsemblePredict(cropCanvas, task="value"){
     await loadTfModelsIfAny();
     const usable = tfModels.filter(m => m.task === task);
-    if(!usable.length){
-      return { text:"", conf:0, source:"none" };
-    }
+    if(!usable.length) return {text:"", conf:0, source:"none"};
 
-    const results = [];
+    const results=[];
     for(const m of usable){
       try{
-        const [inputH, inputW] = m.inputSize || [64, 192];
-        const input = canvasToInputTensor(cropCanvas, inputH, inputW, true);
+        const [H,W] = m.inputSize || [64,192];
+        const input = canvasToInputTensor(cropCanvas, H, W, true);
 
-        let outTensor;
-        if(m.kind === "graph"){
-          outTensor = m.model.execute(input);
-        }else{
-          outTensor = m.model.predict(input);
-        }
+        let outTensor = (m.kind==="graph") ? m.model.execute(input) : m.model.predict(input);
         if(Array.isArray(outTensor)) outTensor = outTensor[0];
 
         const data = await outTensor.data();
         const arr = Array.from(data);
 
-        let decoded = {text:"", conf:0};
-        if(m.decoder === "classmap"){
-          decoded = decodeClassMap(arr, m.classes || []);
-        }else if(m.decoder === "ctc"){
-          decoded = decodeCTCFlat(arr, m.charset || "");
-        }else{
-          decoded = decodeArgmaxText(arr, m.charset || "");
-        }
+        let decoded={text:"", conf:0};
+        if(m.decoder==="classmap") decoded = decodeClassMap(arr, m.classes||[]);
+        else decoded = decodeCTCFlat(arr, m.charset||"");
 
         results.push({
-          name: m.name,
-          task: m.task,
-          weight: m.weight || 1,
           text: cleanPredictedValue(decoded.text),
-          conf: decoded.conf || 0
+          conf: decoded.conf || 0,
+          weight: m.weight || 1
         });
 
         tf.dispose([input, outTensor]);
@@ -336,39 +313,26 @@
       }
     }
 
-    if(!results.length){
-      return { text:"", conf:0, source:"none" };
-    }
-
-    // 加權投票：相同 text 累加 score = conf * weight
-    const vote = new Map();
+    const vote=new Map();
     for(const r of results){
       if(!r.text) continue;
-      const score = (r.conf || 0) * (r.weight || 1);
-      vote.set(r.text, (vote.get(r.text) || 0) + score);
+      const score = (r.conf||0) * (r.weight||1);
+      vote.set(r.text, (vote.get(r.text)||0) + score);
     }
+    if(!vote.size) return {text:"", conf:0, source:"tf", raw:results};
 
-    if(!vote.size){
-      return { text:"", conf:0, source:"tf", raw: results };
-    }
-
-    let bestText = "";
-    let bestScore = -Infinity;
-    let total = 0;
-
-    for(const [txt, score] of vote.entries()){
+    let bestText="", bestScore=-Infinity, total=0;
+    for(const [txt,score] of vote.entries()){
       total += score;
-      if(score > bestScore){
-        bestScore = score;
-        bestText = txt;
-      }
+      if(score>bestScore){bestScore=score;bestText=txt;}
     }
-
-    const conf = total > 0 ? (bestScore / total) : 0;
-    return { text: bestText, conf, source:"tf", raw: results };
+    const conf = total>0 ? (bestScore/total) : 0;
+    return {text:bestText, conf, source:"tf", raw:results};
   }
 
-  // ====== 影像 → Grid ======
+  // ============================================================
+  // =================== 影像 → Grid ============================
+  // ============================================================
   function buildGridFromCanvas(canvas, cellSize){
     const ctx = canvas.getContext("2d");
     const {width, height} = canvas;
@@ -381,8 +345,6 @@
       kind:"empty", // empty | wire | junction | symbol
       black:0,
       wire:{up:false,right:false,down:false,left:false},
-      visited:false,
-      symId:null
     })));
 
     const idx = (x,y)=> (y*width + x)*4;
@@ -393,6 +355,7 @@
     }
     function isBlack(x,y,thr=160){ return lumAt(x,y) < thr; }
 
+    // cell 黑比率 + 中線抽樣判線
     for(let gy=0; gy<rows; gy++){
       for(let gx=0; gx<cols; gx++){
         const x0 = gx*cellSize, y0 = gy*cellSize;
@@ -426,6 +389,7 @@
       }
     }
 
+    // 線方向：看鄰格 wire/junction
     for(let gy=0; gy<rows; gy++){
       for(let gx=0; gx<cols; gx++){
         const c = grid[gy][gx];
@@ -443,6 +407,7 @@
       }
     }
 
+    // junction：deg>=3
     for(let gy=0; gy<rows; gy++){
       for(let gx=0; gx<cols; gx++){
         const c = grid[gy][gx];
@@ -455,13 +420,50 @@
     return {grid, rows, cols, cellSize};
   }
 
-  // ====== 找元件 cluster ======
+  // ============================================================
+  // ================= Junction 抑制（重點） ======================
+  // ============================================================
+  function buildJunctionMap(gridPack){
+    const {grid, rows, cols} = gridPack;
+    const isJ = Array.from({length: rows}, ()=>Array(cols).fill(false));
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        if(grid[y][x].kind==="junction") isJ[y][x]=true;
+      }
+    }
+    return isJ;
+  }
+
+  function nearJunction(isJ, x, y, r=1){
+    const rows = isJ.length, cols = isJ[0].length;
+    for(let dy=-r; dy<=r; dy++){
+      for(let dx=-r; dx<=r; dx++){
+        const nx=x+dx, ny=y+dy;
+        if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+        if(isJ[ny][nx]) return true;
+      }
+    }
+    return false;
+  }
+
+  // ============================================================
+  // =================== 找元件 cluster ==========================
+  // ============================================================
   function detectSymbolClusters(gridPack){
     const {grid, rows, cols} = gridPack;
+
+    // junction map
+    const isJ = buildJunctionMap(gridPack);
+
+    // 先把疑似元件格標成 symbol candidate（junction 周邊排除）
     for(let y=0; y<rows; y++){
       for(let x=0; x<cols; x++){
         const c = grid[y][x];
         if(c.kind==="wire" || c.kind==="junction") continue;
+
+        // junction 周邊 1 格內不當 symbol（避免接點被當元件）
+        if(nearJunction(isJ, x, y, 1)) continue;
+
         if(c.black > 0.12) c.kind = "symbol";
       }
     }
@@ -499,48 +501,46 @@
         if(c.kind!=="symbol") continue;
         const k=key(x,y);
         if(visited.has(k)) continue;
+
         const cl=bfs(x,y);
+
+        // 過小 cluster 多半雜訊，丟
         if(cl.cells.length < 3) continue;
+
+        // 第二道保險：bbox 小且靠近 junction → 當接點擴散丟掉
+        const w = cl.maxX - cl.minX + 1;
+        const h = cl.maxY - cl.minY + 1;
+        const tiny = (w<=2 && h<=2) || (cl.cells.length<=5);
+        if(tiny){
+          const cx = Math.round((cl.minX+cl.maxX)/2);
+          const cy = Math.round((cl.minY+cl.maxY)/2);
+          if(nearJunction(isJ, cx, cy, 2)) continue;
+        }
+
         clusters.push(cl);
       }
     }
     return clusters;
   }
 
-  // ====== fallback 啟發式 ======
-  function guessSymbolType(cluster, gridPack){
+  // ============================================================
+  // =================== 元件分類（fallback） =====================
+  // ============================================================
+  function guessSymbolType(cluster){
     const {minX,maxX,minY,maxY} = cluster;
     const w = maxX-minX+1;
     const h = maxY-minY+1;
 
-    if (Math.abs(w-h) <= 1 && w >= 2 && h >= 2) return {type:"V", rot:90, conf:0.45};
+    // 不再把正方形粗判成 V（就是你出問題的主因）
+    // 先全部回到 R，等你之後用模型修正
     if (h >= w+2) return {type:"R", rot:90, conf:0.40};
     if (w >= h+2) return {type:"R", rot:0, conf:0.40};
     return {type:"R", rot:90, conf:0.25};
   }
 
-  // ====== type 模型從 cluster 裁切預測 ======
-  async function tfTypePredictFromCluster(cluster, gridPack){
-    const {cellSize} = gridPack;
-    const x = cluster.minX * cellSize;
-    const y = cluster.minY * cellSize;
-    const w = (cluster.maxX - cluster.minX + 1) * cellSize;
-    const h = (cluster.maxY - cluster.minY + 1) * cellSize;
-
-    const pad = Math.max(12, Math.floor(cellSize * 0.8));
-    const crop = document.createElement("canvas");
-    crop.width = w + pad * 2;
-    crop.height = h + pad * 2;
-
-    const cctx = crop.getContext("2d");
-    cctx.fillStyle = "#fff";
-    cctx.fillRect(0, 0, crop.width, crop.height);
-    cctx.drawImage(srcC, x, y, w, h, pad, pad, w, h);
-
-    return await tfEnsemblePredict(crop, "type");
-  }
-
-  // ====== cluster → element ======
+  // ============================================================
+  // =================== cluster → element =======================
+  // ============================================================
   function clusterToElement(cluster, cls, gridPack){
     const {cellSize} = gridPack;
     const cx = snap(((cluster.minX + cluster.maxX + 1)/2) * cellSize, cellSize);
@@ -565,7 +565,9 @@
     return el;
   }
 
-  // ====== 線追蹤 ======
+  // ============================================================
+  // =================== 線追蹤（tile 內） =======================
+  // ============================================================
   function traceWires(gridPack){
     const {grid, rows, cols, cellSize} = gridPack;
     const visited = new Set();
@@ -637,9 +639,12 @@
     return wires;
   }
 
-  // ====== 值辨識 ======
+  // ============================================================
+  // =================== 值辨識（可用） ==========================
+  // ============================================================
   function normalizeValueAndType(type, raw){
     const t = (raw||"").replace(/\s+/g,"").toLowerCase();
+
     let newType = type;
     if(t.includes("-j")) newType = "C";
     else if(t.includes("j")) newType = "L";
@@ -684,16 +689,14 @@
       ocrText = cleanPredictedValue(ocrText);
     }
 
-    if(tfPred.text && tfPred.conf >= 0.7){
-      return tfPred.text;
-    }
-    if(ocrText){
-      return ocrText;
-    }
+    if(tfPred.text && tfPred.conf >= 0.7) return tfPred.text;
+    if(ocrText) return ocrText;
     return tfPred.text || "";
   }
 
-  // ====== JSON 組裝 ======
+  // ============================================================
+  // =================== JSON 組裝 ===============================
+  // ============================================================
   function buildJson(cellSize, elements, wires){
     const count = {V:0,R:0,L:0,C:0,GND:0};
     for(const el of elements){
@@ -711,60 +714,9 @@
     };
   }
 
-  // ====== 視覺化 ======
-  function drawDebug(gridPack, clusters, elements, wires){
-    clearCanvas(midCtx, midC);
-    if(img) fitDraw(img, midCtx, midC);
-    if(!debug) return;
-
-    const {rows, cols, cellSize, grid} = gridPack;
-
-    midCtx.globalAlpha = 0.5;
-    midCtx.strokeStyle = "#e5e7eb";
-    for(let x=0;x<=cols*cellSize;x+=cellSize){
-      midCtx.beginPath(); midCtx.moveTo(x,0); midCtx.lineTo(x,rows*cellSize); midCtx.stroke();
-    }
-    for(let y=0;y<=rows*cellSize;y+=cellSize){
-      midCtx.beginPath(); midCtx.moveTo(0,y); midCtx.lineTo(cols*cellSize,y); midCtx.stroke();
-    }
-    midCtx.globalAlpha = 1;
-
-    for(let y=0;y<rows;y++){
-      for(let x=0;x<cols;x++){
-        const c=grid[y][x];
-        if(c.kind==="wire"){
-          midCtx.fillStyle="rgba(37,99,235,0.22)";
-          midCtx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-        }
-        if(c.kind==="junction"){
-          midCtx.fillStyle="rgba(16,185,129,0.28)";
-          midCtx.fillRect(x*cellSize,y*cellSize,cellSize,cellSize);
-        }
-      }
-    }
-
-    midCtx.strokeStyle="#ef4444";
-    midCtx.lineWidth=2;
-    for(const cl of clusters){
-      midCtx.strokeRect(cl.minX*cellSize, cl.minY*cellSize, (cl.maxX-cl.minX+1)*cellSize, (cl.maxY-cl.minY+1)*cellSize);
-    }
-
-    midCtx.strokeStyle="#2563eb"; midCtx.lineWidth=3;
-    for(const w of wires){
-      midCtx.beginPath();
-      midCtx.moveTo(w.points[0].x, w.points[0].y);
-      for(let i=1;i<w.points.length;i++) midCtx.lineTo(w.points[i].x, w.points[i].y);
-      midCtx.stroke();
-    }
-    for(const el of elements){
-      midCtx.strokeStyle="#111827";
-      midCtx.strokeRect(el.x-20, el.y-20, 40, 40);
-      midCtx.fillStyle="#111827";
-      midCtx.font="14px Arial";
-      midCtx.fillText(el.type, el.x+10, el.y-10);
-    }
-  }
-
+  // ============================================================
+  // =================== 視覺化 ===============================
+  // ============================================================
   function drawPreview(json){
     clearCanvas(prevCtx, prevC);
 
@@ -846,47 +798,96 @@
     ctx.restore();
   }
 
-  // ====== 主流程 ======
+  // Debug：把 junction/wire/cluster 直接畫在 midC（合併視覺）
+  function drawDebugMerged(allDebug){
+    clearCanvas(midCtx, midC);
+    if(img) fitDraw(img, midCtx, midC);
+    if(!debug) return;
+
+    // 畫每塊的 overlay
+    for(const d of allDebug){
+      const {gridPack, clusters, ox, oy} = d;
+      const {rows, cols, cellSize, grid} = gridPack;
+
+      // grid 線（淡）
+      midCtx.globalAlpha = 0.22;
+      midCtx.strokeStyle = "#e5e7eb";
+      for(let x=0;x<=cols*cellSize;x+=cellSize){
+        midCtx.beginPath(); midCtx.moveTo(ox+x, oy+0); midCtx.lineTo(ox+x, oy+rows*cellSize); midCtx.stroke();
+      }
+      for(let y=0;y<=rows*cellSize;y+=cellSize){
+        midCtx.beginPath(); midCtx.moveTo(ox+0, oy+y); midCtx.lineTo(ox+cols*cellSize, oy+y); midCtx.stroke();
+      }
+      midCtx.globalAlpha = 1;
+
+      // wire/junction 格
+      for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+          const c=grid[y][x];
+          if(c.kind==="wire"){
+            midCtx.fillStyle="rgba(37,99,235,0.18)";
+            midCtx.fillRect(ox+x*cellSize, oy+y*cellSize, cellSize, cellSize);
+          }
+          if(c.kind==="junction"){
+            midCtx.fillStyle="rgba(16,185,129,0.28)";
+            midCtx.fillRect(ox+x*cellSize, oy+y*cellSize, cellSize, cellSize);
+          }
+        }
+      }
+
+      // cluster bbox
+      midCtx.strokeStyle="#ef4444";
+      midCtx.lineWidth=2;
+      for(const cl of clusters){
+        midCtx.strokeRect(ox+cl.minX*cellSize, oy+cl.minY*cellSize, (cl.maxX-cl.minX+1)*cellSize, (cl.maxY-cl.minY+1)*cellSize);
+      }
+    }
+  }
+
+  // ============================================================
+  // =================== 主流程（四分割） =========================
+  // ============================================================
   async function run(){
     const cellSize = parseInt(cellEl.value, 10) || 20;
     if(!img) return;
 
-    setStatus("載入模型（若有）…");
+    setStatus("切成四塊 + 分塊辨識…");
     await loadTfModelsIfAny();
 
-    setStatus("Grid 分析中…");
-    const gridPack = buildGridFromCanvas(srcC, cellSize);
+    const tiles = splitCanvas4(srcC);
 
-    setStatus("偵測元件 cluster…");
-    const clusters = detectSymbolClusters(gridPack);
+    let allElements = [];
+    let allWires = [];
+    const allDebug = [];
 
-    setStatus("分類元件 + 生成 elements…");
-    const elements = [];
-    for(const cl of clusters){
-      let cls = guessSymbolType(cl, gridPack);
+    for(let i=0;i<tiles.length;i++){
+      const t = tiles[i];
+      setStatus(`處理第 ${i+1}/4 塊…`);
 
-      // type ensemble（有模型才會生效）
-      try{
-        const typePred = await tfTypePredictFromCluster(cl, gridPack);
-        if(typePred.text && typePred.conf >= 0.45){
-          cls.type = typePred.text;
-          cls.conf = typePred.conf;
-        }
-      }catch(e){
-        console.warn("type ensemble failed", e);
+      const gridPack = buildGridFromCanvas(t.canvas, cellSize);
+      const clusters = detectSymbolClusters(gridPack);
+
+      // 先只穩位置/方向：不做 type 模型，避免誤判
+      const elements = [];
+      for(const cl of clusters){
+        const cls = guessSymbolType(cl);
+        elements.push(clusterToElement(cl, cls, gridPack));
       }
 
-      elements.push(clusterToElement(cl, cls, gridPack));
+      const wires = traceWires(gridPack);
+
+      const ox = t.x, oy = t.y;
+      allElements.push(...elements.map(e => offsetElement(e, ox, oy)));
+      allWires.push(...wires.map(w => offsetWire(w, ox, oy)));
+
+      allDebug.push({gridPack, clusters, ox, oy});
     }
 
-    setStatus("追蹤導線…");
-    const wires = traceWires(gridPack);
+    // 先組 JSON（位置/線）
+    let json = buildJson(cellSize, allElements, allWires);
 
-    // 先組 JSON（位置/線先穩）
-    let json = buildJson(cellSize, elements, wires);
-
-    // 值辨識（TF ensemble + OCR fallback）
-    setStatus("辨識數值（多模型/ OCR）…");
+    // 值辨識（可先關掉：把這段整段註解即可）
+    setStatus("辨識數值（OCR/多模型）…");
     for(const el of json.elements){
       if(el.type==="GND") continue;
       const raw = await recognizeValueForElement(el);
@@ -894,17 +895,16 @@
       el.type = fixed.type;
       el.value = fixed.value;
     }
-
-    // 重新命名（因為 type 可能被 -j/j 修正）
     json = buildJson(cellSize, json.elements, json.wires);
 
     lastJson = json;
     outEl.value = JSON.stringify(json, null, 2);
-    drawDebug(gridPack, clusters, json.elements, json.wires);
+
+    drawDebugMerged(allDebug);
     drawPreview(json);
 
     await copyJson(json);
-    setStatus("完成：JSON 已自動複製（可下載）");
+    setStatus("完成：四塊合併 JSON 已自動複製（可下載）");
   }
 
   // ====== UI ======
@@ -936,7 +936,7 @@
   // init
   clearCanvas(srcCtx, srcC); clearCanvas(midCtx, midC); clearCanvas(prevCtx, prevC);
   outEl.value = JSON.stringify({version:2,grid:20,freqHz:60,elements:[],wires:[],junctions:[]}, null, 2);
-  setStatus("就緒：上傳圖片開始（可選：放 ./models/…/model.json 來啟用多模型）");
+  setStatus("就緒：上傳圖片開始（已啟用四分割 + Junction 抑制）");
 })();
 </script>
 </body>
